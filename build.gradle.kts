@@ -31,9 +31,10 @@ intellijPlatform {
     }
     pluginVerification {
         ides {
-            // 支持区间下限（编译目标）与上限（当前最新 IIC 2025.3 = build 253.*）
+            // 支持区间下限：编译目标 ideaIC 2024.1.7（IC 自 2025.3 起不再是可验证目标）
             create(IntelliJPlatformType.IntellijIdeaCommunity, "2024.1.7")
-            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.3")
+            // 支持区间上限：当前最新 IntelliJ IDEA 2026.2.3（build 262.*，新 IntellijIdea 类型）
+            create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
         }
     }
 }
