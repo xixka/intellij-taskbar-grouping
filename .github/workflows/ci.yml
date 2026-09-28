@@ -22,8 +22,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build plugin (compilation check)
-        run: ./gradlew buildPlugin --stacktrace --no-daemon
+      - name: Build and verify plugin
+        run: ./gradlew buildPlugin verifyPlugin --stacktrace --no-daemon
 
       - name: Upload plugin distribution
         if: always()
@@ -31,4 +31,12 @@ jobs:
         with:
           name: idea-taskbar-ungroup-dist
           path: build/distributions/*.zip
+          if-no-files-found: warn
+
+      - name: Upload verifier reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-verifier-reports
+          path: build/reports/pluginVerifier/**
           if-no-files-found: warn

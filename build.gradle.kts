@@ -1,10 +1,12 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+
 plugins {
     java
     kotlin("jvm") version "2.1.0"
     id("org.jetbrains.intellij.platform") version "2.9.0"
 }
 
-group = "com.example"
+group = "com.xixka"
 version = "0.1.0"
 
 repositories {
@@ -17,6 +19,7 @@ repositories {
 dependencies {
     intellijPlatform {
         intellijIdeaCommunity("2024.1.7")
+        pluginVerifier()
     }
 }
 
@@ -24,6 +27,13 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "241"
+        }
+    }
+    pluginVerification {
+        ides {
+            // 支持区间下限（编译目标）与上限（当前最新 IIC 2025.3 = build 253.*）
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2024.1.7")
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.3")
         }
     }
 }
