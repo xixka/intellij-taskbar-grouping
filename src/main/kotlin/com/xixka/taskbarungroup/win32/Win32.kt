@@ -1,4 +1,4 @@
-package com.example.taskbarungroup.win32
+package com.xixka.taskbarungroup.win32
 
 import com.sun.jna.Native
 import com.sun.jna.Pointer

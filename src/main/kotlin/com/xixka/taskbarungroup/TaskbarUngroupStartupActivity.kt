@@ -1,4 +1,4 @@
-package com.example.taskbarungroup
+package com.xixka.taskbarungroup
 
 import com.intellij.jna.JnaLoader
 import com.intellij.openapi.project.Project

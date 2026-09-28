@@ -1,7 +1,7 @@
-package com.example.taskbarungroup
+package com.xixka.taskbarungroup
 
-import com.example.taskbarungroup.win32.findHwndByTitle
-import com.example.taskbarungroup.win32.setWindowAumid
+import com.xixka.taskbarungroup.win32.findHwndByTitle
+import com.xixka.taskbarungroup.win32.setWindowAumid
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.components.Service

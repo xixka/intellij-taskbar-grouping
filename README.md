@@ -28,6 +28,12 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 
 > 验证方式：同时打开 2 个以上项目窗口，任务栏出现对应数量的独立按钮（任务栏保持默认「合并」设置）。`idea.log` 中有 `Taskbar Ungroup: set AUMID '...' for project '...'` 日志。
 
+## 上架 JetBrains Marketplace
+
+- 插件 ID：`com.xixka.taskbarungroup`（Marketplace 禁止 `com.example.*` 占位 ID）
+- 发布通道：`default`，首次上传后需通过 JetBrains 人工审核（约 1–2 个工作日）
+- 发布管线：`Actions → Release → Run workflow`（`.github/workflows/release.yml`，`workflow_dispatch` 手动触发），读取仓库密钥 `PUBLISH_TOKEN`（[Marketplace 个人资料页](https://plugins.jetbrains.com/me)生成）执行 `./gradlew publishPlugin`
+
 ## 开发
 
 ```bash
