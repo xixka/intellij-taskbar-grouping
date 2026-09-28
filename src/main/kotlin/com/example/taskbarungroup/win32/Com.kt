@@ -26,20 +26,23 @@ class GUID(
     }
 
     companion object {
-        /** IID_IPROPERTY_STORE {886D8EEB-8CF2-4446-8D02-6275102EA23C} */
+        /** IID_IPROPERTY_STORE {886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99} */
         @JvmField
         val IID_IPROPERTY_STORE = GUID(
             0x886D8EEB, 0x8CF2, 0x4446,
-            byteArrayOf(0x8D.toByte(), 0x02, 0x62, 0x75, 0x10, 0x2E, 0xA2.toByte(), 0x3C),
+            byteArrayOf(
+                0x8D.toByte(), 0x02, 0xCD.toByte(), 0xBA.toByte(),
+                0x1D, 0xBD.toByte(), 0xCF.toByte(), 0x99.toByte(),
+            ),
         )
 
-        /** PKEY_AppUserModel_ID 的 FMTID {9F4C2855-9F79-4B39-A8D0-E1D42DE4D18E} */
+        /** PKEY_AppUserModel_ID 的 FMTID {9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3} */
         @JvmField
         val FMTID_APPUSERMODEL_ID = GUID(
             0x9F4C2855, 0x9F79, 0x4B39,
             byteArrayOf(
                 0xA8.toByte(), 0xD0.toByte(), 0xE1.toByte(), 0xD4.toByte(),
-                0x2D, 0xE4.toByte(), 0xD1.toByte(), 0x8E.toByte(),
+                0x2D, 0xE1.toByte(), 0xD5.toByte(), 0xF3.toByte(),
             ),
         )
     }
