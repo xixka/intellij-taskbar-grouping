@@ -1,0 +1,14 @@
+<idea-plugin>
+    <id>com.example.taskbar-ungroup</id>
+    <name>Taskbar Ungroup</name>
+    <vendor>xaxka</vendor>
+    <description><![CDATA[
+        <p><b>Taskbar Ungroup</b> — Windows 任务栏多项目窗口取消合并插件。</p>
+        <p>为每个 IntelliJ 项目窗口设置唯一的窗口级 AppUserModelID（PKEY_AppUserModel_ID），
+        使各项目窗口在 Windows 任务栏上显示为独立按钮（无需常驻外部进程，仅作用于 IDE 自身）。</p>
+        <p>同一项目的 AppUserModelID 基于项目路径哈希生成、稳定不变；仅 Windows 生效，
+        其他操作系统上静默不工作。</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+</idea-plugin>
