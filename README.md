@@ -8,7 +8,7 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
 - 项目窗口打开后自动生效（默认无需重启 IDE；插件安装/启用后需重开窗口一次）。
-- 同一项目的 AUMID = `TBG.<产品名>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**。
+- 同一项目的 AUMID = `TBG.<产品名(ASCII 安全化)>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**，并满足 Windows 对 AUMID 的官方约束（≤128 字符、不含空格）。
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口就绪采用「Frame 标题 + 进程号 + 可见性」匹配，未就绪时 500ms 重试、上限 20 次。
 - 依赖平台自带 JNA（`com.intellij.jna.JnaLoader`），**不向插件 zip 打包 jna.jar**，避免类冲突。

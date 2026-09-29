@@ -82,15 +82,30 @@ class TaskbarUngroupService {
 
     /**
      * AUMID 稳定性要求：同一项目每次打开生成相同值（基于项目路径 SHA-256）。
+     *
+     * 格式约束（Microsoft Learn / appids）：不超过 128 字符、不含空格，
+     * 形如 CompanyName.ProductName.SubProduct。产品名（如 "IntelliJ IDEA"）
+     * 含空格等非法字符，需先过滤为 ASCII 字母数字/连字符。
      */
     private fun buildAumid(project: Project): String {
-        val product = ApplicationNamesInfo.getInstance().productName
+        val product = sanitizeAumidSegment(ApplicationNamesInfo.getInstance().productName)
         val path = project.basePath ?: project.name
         val hash = MessageDigest.getInstance("SHA-256")
             .digest(path.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
             .take(AUMID_HASH_LENGTH)
-        return "TBG.$product.$hash"
+        return "TBG.$product.$hash".take(AUMID_MAX_LENGTH)
+    }
+
+    private fun sanitizeAumidSegment(raw: String): String {
+        val sanitized = buildString {
+            for (c in raw) {
+                if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-') {
+                    append(c)
+                }
+            }
+        }
+        return sanitized.ifEmpty { "IDEA" }
     }
 
     companion object {
@@ -98,6 +113,7 @@ class TaskbarUngroupService {
         private const val MAX_ATTEMPTS = 20
         private const val RETRY_DELAY_MS = 500L
         private const val AUMID_HASH_LENGTH = 32
+        private const val AUMID_MAX_LENGTH = 128
 
         fun getInstance(): TaskbarUngroupService =
             ApplicationManager.getApplication().getService(TaskbarUngroupService::class.java)
