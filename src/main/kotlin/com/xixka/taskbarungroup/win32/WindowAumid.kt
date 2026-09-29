@@ -18,6 +18,9 @@ private const val PID_APPUSERMODEL_ID = 5
  */
 private val comLock = Any()
 
+/** 读取窗口标题的缓冲容量（字符）：超长标题被截断将导致精确匹配失败，取 1024 覆盖极端长路径。 */
+private const val TITLE_BUFFER_CHARS = 1024
+
 /**
  * 按标题在当前进程内查找可见顶层窗口的 HWND。
  * 匹配规则：属于当前进程 + 可见 + GetWindowText 与预期完全一致。
@@ -41,7 +44,7 @@ private fun isOwnVisibleWindowWithTitle(hwnd: Pointer, pid: Int, title: String):
     if (windowPid.value != pid || !User32.INSTANCE.IsWindowVisible(hwnd)) {
         return false
     }
-    val buffer = CharArray(512)
+    val buffer = CharArray(TITLE_BUFFER_CHARS)
     val length = User32.INSTANCE.GetWindowTextW(hwnd, buffer, buffer.size)
     if (length <= 0) {
         return false
