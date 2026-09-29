@@ -39,6 +39,11 @@ intellijPlatform {
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
         }
     }
+    publishing {
+        // JetBrains Marketplace 上传令牌（plugins.jetbrains.com 个人资料页生成），
+        // 仅在执行 publishPlugin 任务时读取，构建/验证不受其是否设置影响
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
 }
 
 kotlin {
