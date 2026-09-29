@@ -27,6 +27,8 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "241"
+            // 上限基于 Plugin Verifier 对 IntelliJ IDEA 2026.2.3 (build 262.*) 的实际验证结果
+            untilBuild = "262.*"
         }
     }
     pluginVerification {

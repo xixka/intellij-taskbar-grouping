@@ -18,7 +18,8 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 | 项 | 值 |
 | --- | --- |
 | sinceBuild | 241（IntelliJ Platform 2024.1+） |
-| untilBuild | 无上限 |
+| untilBuild | 262.*（2026.2.3） |
+| 验证范围 | Plugin Verifier 双端实测：ideaIC 2024.1.7 + IntelliJ IDEA 2026.2.3 |
 | 构建目标 | ideaIC 2024.1.7 |
 | 运行要求 | Windows + JBR 17 |
 
