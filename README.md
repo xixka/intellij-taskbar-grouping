@@ -7,7 +7,7 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 ## 行为特性
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
-- 项目窗口打开后自动生效（默认无需重启 IDE；插件安装/启用后需重开窗口一次）。
+- 项目窗口打开后**毫秒级**自动生效（监听 AWT 窗口创建/激活事件，直取 HWND 即时应用；标题匹配路径作为兜底）。默认无需重启 IDE；插件安装/启用后需重开窗口一次。
 - 同一项目的 AUMID = `TBG.<产品名(ASCII 安全化)>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**，并满足 Windows 对 AUMID 的官方约束（≤128 字符、不含空格）。
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口就绪采用「Frame 标题 + 进程号 + 可见性」匹配，未就绪时 500ms 重试、上限 20 次。
@@ -58,12 +58,14 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 
 - `win32/Win32.kt`：user32 / kernel32 / shell32 的最小 JNA 声明（`EnumWindows`、`GetWindowThreadProcessId`、`IsWindowVisible`、`GetWindowTextW`、`GetCurrentProcessId`、`SHGetPropertyStoreForWindow`）；`WNDENUMPROC` 声明为 `fun interface` 以支持 Kotlin SAM 转换。
 - `win32/Com.kt`：`GUID` / `PROPERTYKEY` / `PROPVARIANT`（仅 `VT_LPWSTR`）结构与 `IPropertyStore` vtable 调用（`SetValue`@6 / `Commit`@7 / `Release`@2）。JNA 通过反射发现结构体的**公共字段**，因此 Kotlin 属性必须标注 `@JvmField`。
-- `TaskbarUngroupService.kt`：应用级 `@Service`；EDT 读 Frame 标题 → 后台线程执行 Win32/COM → `Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
-- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点）。
+- `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；**兜底路径**：EDT 读 Frame 标题 → 按标题枚举匹配 → 500ms 重试；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
+- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径）。
+- `TaskbarUngroupBootstrap.kt`：`<applicationListeners>` 引导监听器，插件加载期实例化服务，使即时钩子在首个项目窗口创建前就绪。
 
 ## 已知限制
 
-- 依赖窗口标题匹配 HWND：若 IDE 处于全屏/演示模式等特殊状态，标题可能变化（代码在每次重试时重新读取标题，正常多窗口场景不受影响）。
+- 窗口级 AUMID 只能在窗口显示之后改写：任务栏按钮会经历一次瞬时重组（新按钮替代原分组）。即时应用机制将这一过程压缩到新窗口出现动画之内，通常不可感知；这是 Windows 任务栏对运行时重分组的固有行为，无法完全消除。
+- 依赖窗口标题匹配 HWND（兜底路径）：若 IDE 处于全屏/演示模式等特殊状态，标题可能变化（代码在每次重试时重新读取标题，正常多窗口场景不受影响）。
 - 两个项目窗口标题完全一致时无法区分（默认标题含项目路径，实际很难发生），仅第一个匹配窗口会被应用。
 - 同一项目的「拆分窗口」（多 Frame）仅主窗口被设置 AUMID；拆分出的窗口可能仍与主窗口分为两组。
 - 极端情况下（20 次重试仍无匹配窗口，约 10 秒）放弃并记录 warn 日志。

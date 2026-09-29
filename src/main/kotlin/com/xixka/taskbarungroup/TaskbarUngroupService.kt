@@ -1,7 +1,6 @@
 package com.xixka.taskbarungroup
 
-import com.xixka.taskbarungroup.win32.findHwndByTitle
-import com.xixka.taskbarungroup.win32.setWindowAumid
+import com.intellij.jna.JnaLoader
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.components.Service
@@ -10,8 +9,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.project.ProjectManagerListener
 import com.intellij.openapi.util.SystemInfoRt
+import com.intellij.openapi.wm.IdeFrame
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.xixka.taskbarungroup.win32.componentHwnd
+import com.xixka.taskbarungroup.win32.findHwndByTitle
+import com.xixka.taskbarungroup.win32.setWindowAumid
+import java.awt.AWTEvent
+import java.awt.Toolkit
+import java.awt.event.WindowEvent
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -42,6 +48,46 @@ class TaskbarUngroupService {
                     applied.remove(project)
                 }
             })
+
+        // 即时应用钩子：项目窗口创建/激活事件直取 HWND 应用 AUMID（毫秒级），
+        // 将任务栏按钮重组压缩到新窗口出现动画之内。标题匹配路径作为兜底。
+        if (SystemInfoRt.isWindows) {
+            Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
+        }
+    }
+
+    /**
+     * AWT 窗口事件回调（EDT）。仅处理 WINDOW_OPENED / WINDOW_ACTIVATED 且
+     * 目标为携带项目的 IdeFrame（项目主窗口）。读取 HWND 后转后台线程执行 COM。
+     */
+    private fun onAwtEvent(event: AWTEvent) {
+        if (event.id != WindowEvent.WINDOW_OPENED && event.id != WindowEvent.WINDOW_ACTIVATED) return
+        val window = (event as? WindowEvent)?.window ?: return
+        if (window !is IdeFrame) return
+        if (!JnaLoader.isLoaded()) return
+        try {
+            val project = window.project ?: return
+            if (project.isDisposed || applied.containsKey(project)) return
+            val aumid = buildAumid(project)
+            val hwnd = componentHwnd(window)
+            if (hwnd == null) {
+                scheduleApply(project)
+                return
+            }
+            AppExecutorUtil.getAppExecutorService().execute {
+                if (project.isDisposed || applied.containsKey(project)) return@execute
+                val hr = setWindowAumid(hwnd, aumid)
+                if (hr == S_OK) {
+                    applied[project] = aumid
+                    log.info("Taskbar Ungroup: AUMID '$aumid' applied on window event (project '${project.name}')")
+                } else {
+                    log.warn("Taskbar Ungroup: instant apply failed, hr=0x${Integer.toHexString(hr)}, falling back to title matching")
+                    scheduleApply(project)
+                }
+            }
+        } catch (t: Throwable) {
+            log.warn("Taskbar Ungroup: window hook failed", t)
+        }
     }
 
     fun scheduleApply(project: Project, attempt: Int = 0) {

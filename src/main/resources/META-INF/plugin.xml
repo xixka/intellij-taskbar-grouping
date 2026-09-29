@@ -9,7 +9,7 @@
         a unique <em>window-level</em> AppUserModelID (<code>PKEY_AppUserModel_ID</code>) right after the project opens,
         which makes the taskbar show one button per project &mdash; no external helper process required.</p>
         <ul>
-            <li>Applies automatically within seconds after a project window opens (no IDE restart needed).</li>
+            <li>Applies automatically within milliseconds of a project window opening (no IDE restart needed).</li>
             <li>Stable AppUserModelID derived from the project path hash &mdash; the same project always gets the same identity.</li>
             <li>Windows only; silently inactive on Linux/macOS.</li>
         </ul>
@@ -25,4 +25,9 @@
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="com.xixka.taskbarungroup.TaskbarUngroupStartupActivity"/>
     </extensions>
+
+    <applicationListeners>
+        <listener class="com.xixka.taskbarungroup.TaskbarUngroupBootstrap"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </applicationListeners>
 </idea-plugin>

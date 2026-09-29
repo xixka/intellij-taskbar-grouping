@@ -1,14 +1,26 @@
 package com.xixka.taskbarungroup.win32
 
 import com.sun.jna.Memory
+import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
+import java.awt.Window
 
 private const val S_OK = 0
 
 /** PKEY_AppUserModel_ID 的 PID */
 private const val PID_APPUSERMODEL_ID = 5
+
+/**
+ * 直接从 AWT Window 取原生顶层窗口句柄（JNA Native.getComponentID）。
+ * peer 未创建（窗口尚未显示）时返回 null。仅在确认 JNA 已加载后调用。
+ * 相比标题枚举匹配：零重试、零歧义，事件回调内即可取得。
+ */
+fun componentHwnd(window: Window): Pointer? {
+    val hwnd = Native.getComponentID(window)
+    return if (hwnd != 0L) Pointer(hwnd) else null
+}
 
 /**
  * 串行化所有 COM/JNA 结构调用：
