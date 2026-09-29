@@ -7,6 +7,8 @@ import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.project.ProjectManagerListener
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.util.concurrency.AppExecutorUtil
@@ -30,6 +32,17 @@ class TaskbarUngroupService {
 
     /** 已成功应用 AUMID 的项目 -> AUMID（防止重复设置与窗口标题抖动后误重设） */
     private val applied = ConcurrentHashMap<Project, String>()
+
+    init {
+        // 以 Project 为键持有强引用，须在项目关闭时清理，避免 Project 及其
+        // 类加载器在长会话中累积泄漏（ProjectManager.TOPIC 生命周期与应用相同）
+        ApplicationManager.getApplication().messageBus.connect()
+            .subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
+                override fun projectClosed(project: Project) {
+                    applied.remove(project)
+                }
+            })
+    }
 
     fun scheduleApply(project: Project, attempt: Int = 0) {
         if (!SystemInfoRt.isWindows || project.isDisposed || applied.containsKey(project)) {
