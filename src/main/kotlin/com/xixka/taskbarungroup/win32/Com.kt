@@ -56,16 +56,24 @@ class PROPERTYKEY(
 ) : Structure()
 
 /**
- * 仅覆盖 VT_LPWSTR 分支的简化 PROPVARIANT：
- * 8 字节头（vt + 3 个保留字）+ 8 字节联合（此处按 LPWSTR 指针解释）。
+ * PROPVARIANT（仅按 VT_LPWSTR 使用）。
+ *
+ * 尺寸说明：x64 下 sizeof(PROPVARIANT) = 24 —— 8 字节头（vt + 3 个保留 WORD）
+ * 加 16 字节联合（联合内最大成员为计数数组 CAUB/BLOB = ULONG + 指针）。
+ * 原生实现（如 PropVariantCopy）会按完整 24 字节读取，若结构欠尺寸会造成
+ * JNA 分配内存之后的越界读（未定义行为）。[unionPad] 仅用于把结构补齐到
+ * 正确尺寸，对本插件使用的 VT_LPWSTR 分支无语义影响。
  */
-@Structure.FieldOrder("vt", "wReserved1", "wReserved2", "wReserved3", "pwszVal")
+@Structure.FieldOrder("vt", "wReserved1", "wReserved2", "wReserved3", "pwszVal", "unionPad")
 class PROPVARIANT : Structure() {
     @JvmField var vt: Short = 0
     @JvmField var wReserved1: Short = 0
     @JvmField var wReserved2: Short = 0
     @JvmField var wReserved3: Short = 0
     @JvmField var pwszVal: Pointer? = null
+
+    /** 联合体尾部的占位指针，使结构达到 x64 下 24 字节的真实尺寸。 */
+    @JvmField var unionPad: Pointer? = null
 
     companion object {
         const val VT_LPWSTR: Short = 31
