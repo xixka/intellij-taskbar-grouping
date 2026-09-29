@@ -6,8 +6,6 @@ import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.project.ProjectManagerListener
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.wm.IdeFrame
 import com.intellij.openapi.wm.WindowManager
@@ -40,19 +38,26 @@ class TaskbarUngroupService {
     private val applied = ConcurrentHashMap<Project, String>()
 
     init {
-        // 以 Project 为键持有强引用，须在项目关闭时清理，避免 Project 及其
-        // 类加载器在长会话中累积泄漏（ProjectManager.TOPIC 生命周期与应用相同）
-        ApplicationManager.getApplication().messageBus.connect()
-            .subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
-                override fun projectClosed(project: Project) {
-                    applied.remove(project)
-                }
-            })
+        // 注意：构造函数内不得触碰消息总线。若本服务在某个 topic 的惰性监听器
+        // 构造/消息发布过程中被实例化，在总线订阅者表的 computeIfAbsent 计算
+        // 中嵌套 subscribe 会触发 ConcurrentHashMap "Recursive update" 异常
+        // （实测于 IDEA 2026.1.3）。Project 清理由 purgeDisposedProjects 惰性完成。
 
         // 即时应用钩子：项目窗口创建/激活事件直取 HWND 应用 AUMID（毫秒级），
         // 将任务栏按钮重组压缩到新窗口出现动画之内。标题匹配路径作为兜底。
         if (SystemInfoRt.isWindows) {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
+        }
+    }
+
+    /**
+     * 惰性清理已关闭项目的条目：以 Project 为键持有强引用，若不清理会在长会话
+     * （反复开关项目）中累积泄漏。不订阅 ProjectManager.TOPIC，避免任何
+     * 总线交互带来的实例化上下文约束；在两条应用路径入口处顺带清理即可。
+     */
+    private fun purgeDisposedProjects() {
+        if (applied.isNotEmpty()) {
+            applied.keys.removeIf { it.isDisposed }
         }
     }
 
@@ -65,6 +70,7 @@ class TaskbarUngroupService {
         val window = (event as? WindowEvent)?.window ?: return
         if (window !is IdeFrame) return
         if (!JnaLoader.isLoaded()) return
+        purgeDisposedProjects()
         try {
             val project = window.project ?: return
             if (project.isDisposed || applied.containsKey(project)) return
@@ -91,7 +97,11 @@ class TaskbarUngroupService {
     }
 
     fun scheduleApply(project: Project, attempt: Int = 0) {
-        if (!SystemInfoRt.isWindows || project.isDisposed || applied.containsKey(project)) {
+        if (!SystemInfoRt.isWindows || project.isDisposed) {
+            return
+        }
+        purgeDisposedProjects()
+        if (applied.containsKey(project)) {
             return
         }
         ApplicationManager.getApplication().invokeLater {

@@ -25,9 +25,4 @@
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="com.xixka.taskbarungroup.TaskbarUngroupStartupActivity"/>
     </extensions>
-
-    <applicationListeners>
-        <listener class="com.xixka.taskbarungroup.TaskbarUngroupBootstrap"
-                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
-    </applicationListeners>
 </idea-plugin>

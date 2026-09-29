@@ -59,8 +59,7 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 - `win32/Win32.kt`：user32 / kernel32 / shell32 的最小 JNA 声明（`EnumWindows`、`GetWindowThreadProcessId`、`IsWindowVisible`、`GetWindowTextW`、`GetCurrentProcessId`、`SHGetPropertyStoreForWindow`）；`WNDENUMPROC` 声明为 `fun interface` 以支持 Kotlin SAM 转换。
 - `win32/Com.kt`：`GUID` / `PROPERTYKEY` / `PROPVARIANT`（仅 `VT_LPWSTR`）结构与 `IPropertyStore` vtable 调用（`SetValue`@6 / `Commit`@7 / `Release`@2）。JNA 通过反射发现结构体的**公共字段**，因此 Kotlin 属性必须标注 `@JvmField`。
 - `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；**兜底路径**：EDT 读 Frame 标题 → 按标题枚举匹配 → 500ms 重试；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
-- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径）。
-- `TaskbarUngroupBootstrap.kt`：`<applicationListeners>` 引导监听器，插件加载期实例化服务，使即时钩子在首个项目窗口创建前就绪。
+- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径，并在首个项目打开后使服务常驻）。
 
 ## 已知限制
 
