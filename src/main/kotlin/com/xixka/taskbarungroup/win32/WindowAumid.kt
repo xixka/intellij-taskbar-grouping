@@ -11,6 +11,14 @@ private const val S_OK = 0
 private const val PID_APPUSERMODEL_ID = 5
 
 /**
+ * 串行化所有 COM/JNA 结构调用：
+ * 共享的 IID/FMTID 常量是可变 JNA Structure 实例，每次调用都会被
+ * 自动写回（autoWrite/re-parent），并发使用同一实例存在数据竞争；
+ * 同时也可避免跨线程并发触碰 COM 属性存储。调用本身耗时在毫秒级。
+ */
+private val comLock = Any()
+
+/**
  * 按标题在当前进程内查找可见顶层窗口的 HWND。
  * 匹配规则：属于当前进程 + 可见 + GetWindowText 与预期完全一致。
  */
@@ -43,9 +51,13 @@ private fun isOwnVisibleWindowWithTitle(hwnd: Pointer, pid: Int, title: String):
 
 /**
  * 为窗口设置窗口级 AppUserModelID（PKEY_AppUserModel_ID）并 Commit。
- * 返回 HRESULT（0 = S_OK）。
+ * 返回 HRESULT（0 = S_OK）。所有 COM 调用经 [comLock] 串行化。
  */
-fun setWindowAumid(hwnd: Pointer, aumid: String): Int {
+fun setWindowAumid(hwnd: Pointer, aumid: String): Int = synchronized(comLock) {
+    doSetWindowAumid(hwnd, aumid)
+}
+
+private fun doSetWindowAumid(hwnd: Pointer, aumid: String): Int {
     val ppv = PointerByReference()
     var hr = Shell32.INSTANCE.SHGetPropertyStoreForWindow(hwnd, GUID.IID_IPROPERTY_STORE, ppv)
     if (hr != S_OK) {
