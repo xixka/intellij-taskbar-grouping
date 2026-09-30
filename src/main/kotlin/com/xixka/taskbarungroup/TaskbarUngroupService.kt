@@ -14,6 +14,7 @@ import com.xixka.taskbarungroup.win32.componentHwnd
 import com.xixka.taskbarungroup.win32.findHwndByTitle
 import com.xixka.taskbarungroup.win32.setWindowAumid
 import java.awt.AWTEvent
+import java.awt.GraphicsEnvironment
 import java.awt.Toolkit
 import java.awt.event.WindowEvent
 import java.security.MessageDigest
@@ -45,7 +46,9 @@ class TaskbarUngroupService {
 
         // 即时应用钩子：项目窗口创建/激活事件直取 HWND 应用 AUMID（毫秒级），
         // 将任务栏按钮重组压缩到新窗口出现动画之内。标题匹配路径作为兜底。
-        if (SystemInfoRt.isWindows) {
+        // headless 守卫：引导监听器（AppLifecycleListener.appFrameCreated）在
+        // headless 环境同样触发，而该环境下 Toolkit 不可用。
+        if (SystemInfoRt.isWindows && !GraphicsEnvironment.isHeadless()) {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
         }
     }
@@ -69,11 +72,17 @@ class TaskbarUngroupService {
         if (event.id != WindowEvent.WINDOW_OPENED && event.id != WindowEvent.WINDOW_ACTIVATED) return
         val window = (event as? WindowEvent)?.window ?: return
         if (window !is IdeFrame) return
-        if (!JnaLoader.isLoaded()) return
         purgeDisposedProjects()
         try {
             val project = window.project ?: return
             if (project.isDisposed || applied.containsKey(project)) return
+            if (!JnaLoader.isLoaded()) {
+                // 首个窗口事件可能早于平台加载 JNA 原生库（如引导后立刻开窗）：
+                // 转入标题重试路径——其重试覆盖 10 秒窗口，JNA 就绪后即可完成，
+                // 不再静默放弃（静默会导致退化为启动完成后才应用）
+                scheduleApply(project)
+                return
+            }
             val aumid = buildAumid(project)
             val hwnd = componentHwnd(window)
             if (hwnd == null) {
@@ -82,12 +91,18 @@ class TaskbarUngroupService {
             }
             AppExecutorUtil.getAppExecutorService().execute {
                 if (project.isDisposed || applied.containsKey(project)) return@execute
-                val hr = setWindowAumid(hwnd, aumid)
-                if (hr == S_OK) {
-                    applied[project] = aumid
-                    log.info("Taskbar Ungroup: AUMID '$aumid' applied on window event (project '${project.name}')")
-                } else {
-                    log.warn("Taskbar Ungroup: instant apply failed, hr=0x${Integer.toHexString(hr)}, falling back to title matching")
+                try {
+                    val hr = setWindowAumid(hwnd, aumid)
+                    if (hr == S_OK) {
+                        applied[project] = aumid
+                        log.info("Taskbar Ungroup: AUMID '$aumid' applied on window event (project '${project.name}')")
+                    } else {
+                        log.warn("Taskbar Ungroup: instant apply failed, hr=0x${Integer.toHexString(hr)}, falling back to title matching")
+                        scheduleApply(project)
+                    }
+                } catch (t: Throwable) {
+                    // JNA 原生库可能在钩子注册与本任务执行之间仍未就绪：转自愈重试
+                    log.warn("Taskbar Ungroup: instant apply failed, will retry", t)
                     scheduleApply(project)
                 }
             }
@@ -122,18 +137,25 @@ class TaskbarUngroupService {
     private fun applyAsync(project: Project, title: String, attempt: Int) {
         val aumid = buildAumid(project)
         AppExecutorUtil.getAppExecutorService().execute {
-            val hwnd = findHwndByTitle(title)
-            if (hwnd == null) {
-                // 原生窗口可能尚未创建或标题尚未同步：稍后重试
-                retryLater(project, attempt)
-                return@execute
-            }
-            val hr = setWindowAumid(hwnd, aumid)
-            if (hr == S_OK) {
-                applied[project] = aumid
-                log.info("Taskbar Ungroup: AUMID '$aumid' applied to window of project '${project.name}'")
-            } else {
-                log.warn("Taskbar Ungroup: setWindowAumid failed for '${project.name}', hr=0x${Integer.toHexString(hr)}")
+            try {
+                val hwnd = findHwndByTitle(title)
+                if (hwnd == null) {
+                    // 原生窗口可能尚未创建或标题尚未同步：稍后重试
+                    retryLater(project, attempt)
+                    return@execute
+                }
+                val hr = setWindowAumid(hwnd, aumid)
+                if (hr == S_OK) {
+                    applied[project] = aumid
+                    log.info("Taskbar Ungroup: AUMID '$aumid' applied to window of project '${project.name}'")
+                } else {
+                    log.warn("Taskbar Ungroup: setWindowAumid failed for '${project.name}', hr=0x${Integer.toHexString(hr)}")
+                    retryLater(project, attempt)
+                }
+            } catch (t: Throwable) {
+                // 自愈式重试：覆盖 JNA 原生库尚未就绪（UnsatisfiedLinkError）等
+                // 瞬态错误——首个项目窗口可能早于平台加载 JNA
+                log.warn("Taskbar Ungroup: title path failed (attempt ${attempt + 1}), will retry", t)
                 retryLater(project, attempt)
             }
         }

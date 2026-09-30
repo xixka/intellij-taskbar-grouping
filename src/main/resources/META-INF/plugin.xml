@@ -25,4 +25,9 @@
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="com.xixka.taskbarungroup.TaskbarUngroupStartupActivity"/>
     </extensions>
+
+    <applicationListeners>
+        <listener class="com.xixka.taskbarungroup.TaskbarUngroupBootstrap"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
 </idea-plugin>

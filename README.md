@@ -8,6 +8,7 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
 - 项目窗口打开后**毫秒级**自动生效（监听 AWT 窗口创建/激活事件，直取 HWND 即时应用；标题匹配路径作为兜底）。默认无需重启 IDE；插件安装/启用后需重开窗口一次。
+- 服务经 `AppLifecycleListener.appFrameCreated`（应用首个窗口显示之前发布，公开 API）引导实例化，因此 **IDE 启动后的首个项目窗口同样走即时路径**；JNA 未就绪等瞬态失败自动转入重试自愈。
 - 同一项目的 AUMID = `TBG.<产品名(ASCII 安全化)>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**，并满足 Windows 对 AUMID 的官方约束（≤128 字符、不含空格）。
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口就绪采用「Frame 标题 + 进程号 + 可见性」匹配，未就绪时 500ms 重试、上限 20 次。
@@ -59,7 +60,8 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 - `win32/Win32.kt`：user32 / kernel32 / shell32 的最小 JNA 声明（`EnumWindows`、`GetWindowThreadProcessId`、`IsWindowVisible`、`GetWindowTextW`、`GetCurrentProcessId`、`SHGetPropertyStoreForWindow`）；`WNDENUMPROC` 声明为 `fun interface` 以支持 Kotlin SAM 转换。
 - `win32/Com.kt`：`GUID` / `PROPERTYKEY` / `PROPVARIANT`（仅 `VT_LPWSTR`）结构与 `IPropertyStore` vtable 调用（`SetValue`@6 / `Commit`@7 / `Release`@2）。JNA 通过反射发现结构体的**公共字段**，因此 Kotlin 属性必须标注 `@JvmField`。
 - `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；**兜底路径**：EDT 读 Frame 标题 → 按标题枚举匹配 → 500ms 重试；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
-- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径，并在首个项目打开后使服务常驻）。
+- `TaskbarUngroupBootstrap.kt`：`AppLifecycleListener.appFrameCreated` 引导监听器（`<applicationListeners>` 惰性注册）。该消息由平台在决定打开首个窗口之前同步发布（见 `IdeStarter.openProjectIfNeeded`），因此首个项目窗口 `WINDOW_OPENED` 时 AWT 钩子已就绪，同样走即时路径；构造函数刻意零副作用，实例化安全性与发布时机无关。
+- `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径，并作为引导未生效时的服务实例化保险）。
 
 ## 已知限制
 
