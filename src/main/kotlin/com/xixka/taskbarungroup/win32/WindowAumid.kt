@@ -3,7 +3,6 @@ package com.xixka.taskbarungroup.win32
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
-import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.PointerByReference
 import java.awt.Window
 
@@ -14,8 +13,10 @@ private const val PID_APPUSERMODEL_ID = 5
 
 /**
  * 直接从 AWT Window 取原生顶层窗口句柄（JNA Native.getComponentID）。
- * peer 未创建（窗口尚未显示）时返回 null。仅在确认 JNA 已加载后调用。
- * 相比标题枚举匹配：零重试、零歧义，事件回调内即可取得。
+ * peer 未创建（窗口尚未显示）时返回 null。仅在确认 JNA 已加载后、
+ * 且在 EDT 上调用（AWT peer 访问要求）。
+ * 相比标题枚举匹配：零重试、零歧义——同进程内两个同名项目的窗口标题
+ * 完全相同，按标题匹配存在误绑定到别的项目窗口的风险。
  */
 fun componentHwnd(window: Window): Pointer? {
     val hwnd = Native.getComponentID(window)
@@ -29,40 +30,6 @@ fun componentHwnd(window: Window): Pointer? {
  * 同时也可避免跨线程并发触碰 COM 属性存储。调用本身耗时在毫秒级。
  */
 private val comLock = Any()
-
-/** 读取窗口标题的缓冲容量（字符）：超长标题被截断将导致精确匹配失败，取 1024 覆盖极端长路径。 */
-private const val TITLE_BUFFER_CHARS = 1024
-
-/**
- * 按标题在当前进程内查找可见顶层窗口的 HWND。
- * 匹配规则：属于当前进程 + 可见 + GetWindowText 与预期完全一致。
- */
-fun findHwndByTitle(expectedTitle: String): Pointer? {
-    val pid = Kernel32.INSTANCE.GetCurrentProcessId()
-    var found: Pointer? = null
-    User32.INSTANCE.EnumWindows(User32.WNDENUMPROC { hwnd, _ ->
-        val matches = isOwnVisibleWindowWithTitle(hwnd, pid, expectedTitle)
-        if (matches) {
-            found = hwnd
-        }
-        !matches
-    }, null)
-    return found
-}
-
-private fun isOwnVisibleWindowWithTitle(hwnd: Pointer, pid: Int, title: String): Boolean {
-    val windowPid = IntByReference()
-    User32.INSTANCE.GetWindowThreadProcessId(hwnd, windowPid)
-    if (windowPid.value != pid || !User32.INSTANCE.IsWindowVisible(hwnd)) {
-        return false
-    }
-    val buffer = CharArray(TITLE_BUFFER_CHARS)
-    val length = User32.INSTANCE.GetWindowTextW(hwnd, buffer, buffer.size)
-    if (length <= 0) {
-        return false
-    }
-    return String(buffer, 0, length) == title
-}
 
 /**
  * 为窗口设置窗口级 AppUserModelID（PKEY_AppUserModel_ID）并 Commit。

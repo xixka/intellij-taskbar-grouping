@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.xixka.taskbarungroup</id>
     <name>Taskbar Ungroup</name>
-    <vendor url="https://github.com/xixka/intellij-taskbar-grouping">xaxka</vendor>
+    <vendor url="https://github.com/xixka/intellij-taskbar-grouping">xixka</vendor>
     <description><![CDATA[
         <p><b>Taskbar Ungroup</b> gives every IntelliJ IDEA project window its own button on the Windows taskbar.</p>
         <p>IntelliJ IDEA is a single-process, multi-window application: all project windows share one process-level
@@ -16,9 +16,14 @@
         <p>中文说明：让每个 IntelliJ 项目窗口在 Windows 任务栏上显示为独立按钮（取消合并），同一项目标识稳定不变。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.2.1: all windows of the same project now share the project's identity — previously only the first
+        window of a project was ungrouped, so a second window (Open in New Window, torn-off editor tab) fell back
+        into the default IDE group. The post-startup fallback no longer gives up when JNA is not yet loaded
+        (the service retries and self-heals). Window lookup now uses the frame handle directly, removing the
+        by-title matching that could mis-apply when two projects had identical window titles.</p>
         <p>0.2.0: first project window after IDE startup now applies the AUMID at window show time —
-        the platform shows the frame before the project is attached to it, so the plugin now polls for project
-        attachment (150 ms) instead of waiting for startup completion; JNA is preloaded in the background.</p>
+        the platform shows the frame before the project is attached to it, so the plugin polls for project
+        attachment (150 ms) instead of waiting for startup completion.</p>
         <p>Initial release (0.1.0): per-project window AppUserModelID with auto-apply, retry on not-yet-ready windows,
         and silent no-op on non-Windows systems.</p>
     ]]></change-notes>
