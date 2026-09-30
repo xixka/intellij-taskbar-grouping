@@ -8,7 +8,7 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
 - 项目窗口打开后**毫秒级**自动生效（监听 AWT 窗口创建/激活事件，直取 HWND 即时应用；标题匹配路径作为兜底）。默认无需重启 IDE；插件安装/启用后需重开窗口一次。
-- 服务经 `AppLifecycleListener.appFrameCreated`（应用首个窗口显示之前发布，公开 API）引导实例化。平台启动时**先显示窗口、后挂接项目**（`IdeProjectFrameAllocator` 中两者并行），插件对无项目窗口做 150ms EDT 轮询，项目挂接即应用——因此 **IDE 启动后的首个项目窗口在加载早期（而非启动完成）即生效**；JNA 在服务初始化时后台预载，未就绪等瞬态失败自动转入重试自愈。
+- 服务经 `AppLifecycleListener.appFrameCreated`（应用首个窗口显示之前发布，公开 API）引导实例化。平台启动时**先显示窗口、后挂接项目**（`IdeProjectFrameAllocator` 中两者并行），插件对无项目窗口做 150ms EDT 轮询，项目挂接即应用——因此 **IDE 启动后的首个项目窗口在加载早期（而非启动完成）即生效**；JNA 未就绪等瞬态失败自动转入重试自愈（不主动调用 `JnaLoader.load`：其签名跨版本不兼容，241 为 `load(Logger)`、2026.x 为无参 `load()`）。
 - 同一项目的 AUMID = `TBG.<产品名(ASCII 安全化)>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**，并满足 Windows 对 AUMID 的官方约束（≤128 字符、不含空格）。
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口就绪采用「Frame 标题 + 进程号 + 可见性」匹配，未就绪时 500ms 重试、上限 20 次。

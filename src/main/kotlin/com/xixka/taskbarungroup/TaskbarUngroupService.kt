@@ -61,9 +61,9 @@ class TaskbarUngroupService {
         // headless 环境同样触发，而该环境下 Toolkit 不可用。
         if (SystemInfoRt.isWindows && !GraphicsEnvironment.isHeadless()) {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
-            // 后台预载 JNA 原生库：平台自身可能到启动中后期才首次使用 JNA，
-            // 首窗即时路径不应因此退化为 500ms 粒度的重试等待
-            AppExecutorUtil.getAppExecutorService().execute { JnaLoader.load() }
+            // 不主动调用 JnaLoader.load：其签名跨版本不兼容（241 为 load(Logger)，
+            // 2026.x 为无参 load()），直接调用必在其中一端编译/二进制不兼容。
+            // JNA 若尚未就绪，由各应用路径的 Throwable 自愈重试兜底（500ms 粒度）。
         }
         log.info("Taskbar Ungroup: service initialized (AWT hook ${if (SystemInfoRt.isWindows) "registered" else "skipped (non-Windows)"})")
     }
