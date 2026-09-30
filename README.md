@@ -8,7 +8,7 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
 - 项目窗口打开后**毫秒级**自动生效（监听 AWT 窗口创建/激活事件，直取 HWND 即时应用；标题匹配路径作为兜底）。默认无需重启 IDE；插件安装/启用后需重开窗口一次。
-- 服务经 `AppLifecycleListener.appFrameCreated`（应用首个窗口显示之前发布，公开 API）引导实例化，因此 **IDE 启动后的首个项目窗口同样走即时路径**；JNA 未就绪等瞬态失败自动转入重试自愈。
+- 服务经 `AppLifecycleListener.appFrameCreated`（应用首个窗口显示之前发布，公开 API）引导实例化。平台启动时**先显示窗口、后挂接项目**（`IdeProjectFrameAllocator` 中两者并行），插件对无项目窗口做 150ms EDT 轮询，项目挂接即应用——因此 **IDE 启动后的首个项目窗口在加载早期（而非启动完成）即生效**；JNA 在服务初始化时后台预载，未就绪等瞬态失败自动转入重试自愈。
 - 同一项目的 AUMID = `TBG.<产品名(ASCII 安全化)>.<项目路径 SHA-256 前 32 位>`，**基于项目路径哈希、稳定不变**，并满足 Windows 对 AUMID 的官方约束（≤128 字符、不含空格）。
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口就绪采用「Frame 标题 + 进程号 + 可见性」匹配，未就绪时 500ms 重试、上限 20 次。
@@ -59,13 +59,13 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 
 - `win32/Win32.kt`：user32 / kernel32 / shell32 的最小 JNA 声明（`EnumWindows`、`GetWindowThreadProcessId`、`IsWindowVisible`、`GetWindowTextW`、`GetCurrentProcessId`、`SHGetPropertyStoreForWindow`）；`WNDENUMPROC` 声明为 `fun interface` 以支持 Kotlin SAM 转换。
 - `win32/Com.kt`：`GUID` / `PROPERTYKEY` / `PROPVARIANT`（仅 `VT_LPWSTR`）结构与 `IPropertyStore` vtable 调用（`SetValue`@6 / `Commit`@7 / `Release`@2）。JNA 通过反射发现结构体的**公共字段**，因此 Kotlin 属性必须标注 `@JvmField`。
-- `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；**兜底路径**：EDT 读 Frame 标题 → 按标题枚举匹配 → 500ms 重试；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
+- `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；启动期窗口先显示后挂接项目（平台 `IdeProjectFrameAllocator` 并行流程），故对无项目窗口以 `javax.swing.Timer` 150ms 轮询等待挂接（上限 9 秒）；**兜底路径**：EDT 读 Frame 标题 → 按标题枚举匹配 → 500ms 重试；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`；服务初始化时后台预载 JNA。
 - `TaskbarUngroupBootstrap.kt`：`AppLifecycleListener.appFrameCreated` 引导监听器（`<applicationListeners>` 惰性注册）。该消息由平台在决定打开首个窗口之前同步发布（见 `IdeStarter.openProjectIfNeeded`），因此首个项目窗口 `WINDOW_OPENED` 时 AWT 钩子已就绪，同样走即时路径；构造函数刻意零副作用，实例化安全性与发布时机无关。
 - `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径，并作为引导未生效时的服务实例化保险）。
 
 ## 已知限制
 
-- 窗口级 AUMID 只能在窗口显示之后改写：任务栏按钮会经历一次瞬时重组（新按钮替代原分组）。即时应用机制将这一过程压缩到新窗口出现动画之内，通常不可感知；这是 Windows 任务栏对运行时重分组的固有行为，无法完全消除。
+- 窗口级 AUMID 只能在窗口显示之后改写：任务栏按钮会经历一次瞬时重组（新按钮替代原分组）。后续打开的项目在窗口出现动画之内完成（通常不可感知）；IDE 启动后的首个窗口因平台「先显示后挂项目」在加载早期完成（挂接后毫秒级，早于启动完成）。这是 Windows 任务栏对运行时重分组的固有行为，无法完全消除。
 - 依赖窗口标题匹配 HWND（兜底路径）：若 IDE 处于全屏/演示模式等特殊状态，标题可能变化（代码在每次重试时重新读取标题，正常多窗口场景不受影响）。
 - 两个项目窗口标题完全一致时无法区分（默认标题含项目路径，实际很难发生），仅第一个匹配窗口会被应用。
 - 同一项目的「拆分窗口」（多 Frame）仅主窗口被设置 AUMID；拆分出的窗口可能仍与主窗口分为两组。

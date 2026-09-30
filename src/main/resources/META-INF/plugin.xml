@@ -16,6 +16,9 @@
         <p>中文说明：让每个 IntelliJ 项目窗口在 Windows 任务栏上显示为独立按钮（取消合并），同一项目标识稳定不变。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.2.0: first project window after IDE startup now applies the AUMID at window show time —
+        the platform shows the frame before the project is attached to it, so the plugin now polls for project
+        attachment (150 ms) instead of waiting for startup completion; JNA is preloaded in the background.</p>
         <p>Initial release (0.1.0): per-project window AppUserModelID with auto-apply, retry on not-yet-ready windows,
         and silent no-op on non-Windows systems.</p>
     ]]></change-notes>

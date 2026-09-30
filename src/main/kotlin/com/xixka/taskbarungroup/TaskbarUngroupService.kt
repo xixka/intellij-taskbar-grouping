@@ -16,10 +16,13 @@ import com.xixka.taskbarungroup.win32.setWindowAumid
 import java.awt.AWTEvent
 import java.awt.GraphicsEnvironment
 import java.awt.Toolkit
+import java.awt.Window
 import java.awt.event.WindowEvent
 import java.security.MessageDigest
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import javax.swing.Timer
 
 /**
  * 应用级服务：在每个项目窗口就绪后为其设置窗口级 AppUserModelID。
@@ -38,6 +41,14 @@ class TaskbarUngroupService {
     /** 已成功应用 AUMID 的项目 -> AUMID（防止重复设置与窗口标题抖动后误重设） */
     private val applied = ConcurrentHashMap<Project, String>()
 
+    /**
+     * 等待项目挂接的窗口集合。启动期平台「先显示窗口、后挂接项目」：
+     * IdeProjectFrameAllocator 中 frame 创建/显示与 awaitProjectPreInit 之后的
+     * assignFrame/setProject 并行执行，WINDOW_OPENED 时刻 IdeFrame.project 为
+     * null（实证于平台源码）。对这些窗口启动 EDT 轮询，挂接后立即应用。
+     */
+    private val pendingWindows = Collections.newSetFromMap(ConcurrentHashMap<Window, Boolean>())
+
     init {
         // 注意：构造函数内不得触碰消息总线。若本服务在某个 topic 的惰性监听器
         // 构造/消息发布过程中被实例化，在总线订阅者表的 computeIfAbsent 计算
@@ -50,7 +61,11 @@ class TaskbarUngroupService {
         // headless 环境同样触发，而该环境下 Toolkit 不可用。
         if (SystemInfoRt.isWindows && !GraphicsEnvironment.isHeadless()) {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
+            // 后台预载 JNA 原生库：平台自身可能到启动中后期才首次使用 JNA，
+            // 首窗即时路径不应因此退化为 500ms 粒度的重试等待
+            AppExecutorUtil.getAppExecutorService().execute { JnaLoader.load() }
         }
+        log.info("Taskbar Ungroup: service initialized (AWT hook ${if (SystemInfoRt.isWindows) "registered" else "skipped (non-Windows)"})")
     }
 
     /**
@@ -74,40 +89,80 @@ class TaskbarUngroupService {
         if (window !is IdeFrame) return
         purgeDisposedProjects()
         try {
-            val project = window.project ?: return
-            if (project.isDisposed || applied.containsKey(project)) return
-            if (!JnaLoader.isLoaded()) {
-                // 首个窗口事件可能早于平台加载 JNA 原生库（如引导后立刻开窗）：
-                // 转入标题重试路径——其重试覆盖 10 秒窗口，JNA 就绪后即可完成，
-                // 不再静默放弃（静默会导致退化为启动完成后才应用）
-                scheduleApply(project)
-                return
-            }
-            val aumid = buildAumid(project)
-            val hwnd = componentHwnd(window)
-            if (hwnd == null) {
-                scheduleApply(project)
-                return
-            }
-            AppExecutorUtil.getAppExecutorService().execute {
-                if (project.isDisposed || applied.containsKey(project)) return@execute
-                try {
-                    val hr = setWindowAumid(hwnd, aumid)
-                    if (hr == S_OK) {
-                        applied[project] = aumid
-                        log.info("Taskbar Ungroup: AUMID '$aumid' applied on window event (project '${project.name}')")
-                    } else {
-                        log.warn("Taskbar Ungroup: instant apply failed, hr=0x${Integer.toHexString(hr)}, falling back to title matching")
-                        scheduleApply(project)
-                    }
-                } catch (t: Throwable) {
-                    // JNA 原生库可能在钩子注册与本任务执行之间仍未就绪：转自愈重试
-                    log.warn("Taskbar Ungroup: instant apply failed, will retry", t)
-                    scheduleApply(project)
-                }
+            val project = window.project
+            if (project != null) {
+                if (project.isDisposed || applied.containsKey(project)) return
+                applyInstant(window, project)
+            } else {
+                // 启动期窗口先显示、项目后挂接：转入挂接等待轮询
+                watchProjectlessWindow(window)
             }
         } catch (t: Throwable) {
             log.warn("Taskbar Ungroup: window hook failed", t)
+        }
+    }
+
+    /**
+     * 等待项目挂接到窗口（EDT 轮询）。平台在启动期并行执行「frame 创建/显示」与
+     * 「awaitProjectPreInit 后的 assignFrame/setProject」，首窗 WINDOW_OPENED 时
+     * project 为 null；挂接通常发生在加载早期（远早于启动完成）。窗口关闭或
+     * 超出轮询上限则放弃，由启动完成后的兜底路径接管。
+     */
+    private fun watchProjectlessWindow(window: Window) {
+        if (!pendingWindows.add(window)) return
+        val timer = Timer(PENDING_POLL_MS, null)
+        var polls = 0
+        timer.addActionListener {
+            polls++
+            if (!window.isDisplayable || polls >= PENDING_MAX_POLLS) {
+                timer.stop()
+                pendingWindows.remove(window)
+                return@addActionListener
+            }
+            val project = (window as? IdeFrame)?.project ?: return@addActionListener
+            timer.stop()
+            pendingWindows.remove(window)
+            try {
+                if (!project.isDisposed && !applied.containsKey(project)) {
+                    applyInstant(window, project)
+                }
+            } catch (t: Throwable) {
+                log.warn("Taskbar Ungroup: pending window apply failed", t)
+            }
+        }
+        timer.start()
+    }
+
+    /** 即时路径：窗口事件（或挂接轮询）直取 HWND → 后台线程 COM 应用 */
+    private fun applyInstant(window: Window, project: Project) {
+        if (!JnaLoader.isLoaded()) {
+            // 首个窗口事件可能早于 JNA 原生库就绪（后台预载进行中）：
+            // 转入标题重试路径——其重试覆盖 10 秒窗口，JNA 就绪后即可完成
+            scheduleApply(project)
+            return
+        }
+        val aumid = buildAumid(project)
+        val hwnd = componentHwnd(window)
+        if (hwnd == null) {
+            scheduleApply(project)
+            return
+        }
+        AppExecutorUtil.getAppExecutorService().execute {
+            if (project.isDisposed || applied.containsKey(project)) return@execute
+            try {
+                val hr = setWindowAumid(hwnd, aumid)
+                if (hr == S_OK) {
+                    applied[project] = aumid
+                    log.info("Taskbar Ungroup: AUMID '$aumid' applied on window event (project '${project.name}')")
+                } else {
+                    log.warn("Taskbar Ungroup: instant apply failed, hr=0x${Integer.toHexString(hr)}, falling back to title matching")
+                    scheduleApply(project)
+                }
+            } catch (t: Throwable) {
+                // JNA 原生库可能在钩子触发与本任务执行之间仍未就绪：转自愈重试
+                log.warn("Taskbar Ungroup: instant apply failed, will retry", t)
+                scheduleApply(project)
+            }
         }
     }
 
@@ -205,6 +260,8 @@ class TaskbarUngroupService {
         private const val RETRY_DELAY_MS = 500L
         private const val AUMID_HASH_LENGTH = 32
         private const val AUMID_MAX_LENGTH = 128
+        private const val PENDING_POLL_MS = 150
+        private const val PENDING_MAX_POLLS = 60
 
         fun getInstance(): TaskbarUngroupService =
             ApplicationManager.getApplication().getService(TaskbarUngroupService::class.java)
