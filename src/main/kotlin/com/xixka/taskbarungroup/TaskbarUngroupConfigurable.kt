@@ -3,7 +3,7 @@ package com.xixka.taskbarungroup
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
-import com.intellij.openapi.util.FileUtil
+import java.io.File
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
@@ -55,7 +55,7 @@ class TaskbarUngroupConfigurable : Configurable {
             .withDescription("Select an application (.exe) whose windows should be ungrouped on the taskbar")
             .withFileFilter { file -> !file.isDirectory && "exe".equals(file.extension, ignoreCase = true) }
         val file = FileChooser.chooseFile(descriptor, null, null) ?: return
-        val path = FileUtil.toSystemDependentName(file.path)
+        val path = File(file.path).absolutePath
         if (!model.contains(path)) {
             model.addElement(path)
         }
