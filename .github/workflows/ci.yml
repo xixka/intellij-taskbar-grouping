@@ -50,7 +50,7 @@ jobs:
     name: Windows functional smoke test (external-app ungrouping)
     needs: build
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,6 +88,15 @@ jobs:
           </application>
           '@
           Set-Content -Path (Join-Path $optionsDir 'taskbarUngroup.xml') -Value $xml -Encoding UTF8
+          # 预置 FUS 同意状态（组件名如不匹配会被 IDE 忽略，无副作用）
+          $fus = @'
+          <application>
+            <component name="UsageStatistics">
+              <option name="isShown" value="true" />
+            </component>
+          </application>
+          '@
+          Set-Content -Path (Join-Path $optionsDir 'usages-statistics.xml') -Value $fus -Encoding UTF8
           Get-Content (Join-Path $optionsDir 'taskbarUngroup.xml')
 
       - name: Boot sandbox IDE in background
@@ -96,8 +105,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Start-Process -FilePath './gradlew.bat' -ArgumentList 'runIde', '--no-daemon', '--console=plain' `
             -WorkingDirectory (Get-Location) -RedirectStandardOutput 'ide-stdout.log' -RedirectStandardError 'ide-stderr.log'
-          $deadline = (Get-Date).AddSeconds(240)
+          # 无人值守 CI：自动识别并回车关闭首启同意类弹窗（数据共享等）
+          $shell = New-Object -ComObject WScript.Shell
+          $dialogPattern = 'Data Sharing|Usage Statistic|anonymous|Privacy|consent'
+          $deadline = (Get-Date).AddSeconds(300)
           while ((Get-Date) -lt $deadline) {
+            try {
+              $dlg = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match $dialogPattern } | Select-Object -First 1
+              if ($dlg -and $shell.AppActivate($dlg.Id)) {
+                Start-Sleep -Milliseconds 500
+                $shell.SendKeys('{ENTER}')
+                Write-Host "Dismissed dialog: '$($dlg.MainWindowTitle)'"
+              }
+            } catch { }
             $log = Get-ChildItem 'build/idea-sandbox' -Recurse -Filter 'idea.log' -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($log -and (Select-String -Path $log.FullName -Pattern 'Taskbar Ungroup: service initialized' -Quiet -ErrorAction SilentlyContinue)) {
               Write-Host "IDE booted, plugin service initialized (log: $($log.FullName))"
@@ -106,7 +126,7 @@ jobs:
             }
             Start-Sleep -Seconds 3
           }
-          Write-Host 'IDE boot timeout: plugin service not initialized within 240s'
+          Write-Host 'IDE boot timeout: plugin service not initialized within 300s'
           exit 1
 
       - name: Launch notepad windows and assert AUMID assignment
