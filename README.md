@@ -4,6 +4,8 @@
 
 IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程级 AppUserModelID，任务栏因此把它们合并成一个按钮。本插件在每个项目窗口就绪后，通过 Win32 `SHGetPropertyStoreForWindow` 给该窗口设置**唯一的窗口级 AppUserModelID**（`PKEY_AppUserModel_ID`），窗口级 AUMID 优先级高于进程级，各项目窗口随即在任务栏独立成组——效果等同于 [tbg-lite](https://github.com/xixka/taskbar-grouping) 的 `ungroup` 模式，但只作用于 IDE 自身，无需常驻外部进程。
 
+自 0.3.0 起，可在 **设置 → Tools → Taskbar Ungroup** 中添加其他应用的 `.exe`，让这些应用的窗口也各自独立成任务栏按钮（详见「外部应用取消分组」）。默认不配置时行为与旧版完全一致。
+
 ## 行为特性
 
 - 仅 **Windows** 生效；Linux/macOS 上静默不工作、无报错（`SystemInfoRt.isWindows` 守卫）。
@@ -14,6 +16,15 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 - 关闭项目窗口后对应任务栏按钮随窗口消失；`explorer.exe` 重启后属性随 HWND 保留。
 - 窗口定位一律经 AWT peer 直取 HWND（`Native.getComponentID`），不做标题枚举匹配——同进程内两个同名项目的窗口标题完全相同，按标题匹配存在误绑定风险；未就绪时 500ms 重试、上限 20 次（启动兜底路径亦然，JNA 迟到不提前放弃）。
 - 依赖平台自带 JNA（`com.intellij.jna.JnaLoader`），**不向插件 zip 打包 jna.jar**，避免类冲突。
+
+## 外部应用取消分组（0.3.0+）
+
+**设置 → Tools → Taskbar Ungroup**：点 ➕ 选择应用的 `.exe`（如 `chrome.exe`），Apply 后：
+
+- 该应用的**每个可见顶层窗口获得每窗口唯一的 AUMID**（`TBG.X.<pid>.<hwnd>`），任务栏各自独立成按钮；新开窗口 2 秒内被后台扫描捕获。
+- 匹配按 **exe 文件名**（大小写不敏感）进行，应用升级/换盘不影响生效；完整路径仅作展示。
+- 移除条目（或清空列表）后，已生效窗口尽力清空显式 AUMID 恢复默认分组；若系统拒绝空值，**重开该应用窗口即彻底恢复**。
+- 实现途径：`EnumWindows` 枚举 + `GetWindowThreadProcessId`/`QueryFullProcessImageNameW` 归属进程，随后同样走 `SHGetPropertyStoreForWindow` 写窗口属性——**Shell 官方跨进程属性接口，不注入 DLL、不挂钩子、不起远程线程**；自动跳过 IDE 自身进程（项目窗口仍按项目分组）。
 
 ## 兼容性
 
@@ -58,9 +69,12 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 
 ## 实现要点
 
-- `win32/Win32.kt`：仅 shell32 的最小 JNA 声明（`SHGetPropertyStoreForWindow`）。窗口句柄一律经 AWT peer 直取，无需 user32/kernel32 枚举。
+- `win32/Win32.kt`：最小 JNA 声明——shell32（`SHGetPropertyStoreForWindow`）+ 外部应用路径所需的 user32/kernel32（`EnumWindows`/`GetWindowThreadProcessId`/`QueryFullProcessImageNameW` 等）。IDE 自身窗口仍经 AWT peer 直取 HWND。HWND 在外部路径以 `Long`（64 位指针值）传递，Windows 侧 JBR 仅 64 位。
 - `win32/Com.kt`：`GUID` / `PROPERTYKEY` / `PROPVARIANT`（仅 `VT_LPWSTR`）结构与 `IPropertyStore` vtable 调用（`SetValue`@6 / `Commit`@7 / `Release`@2）。JNA 通过反射发现结构体的**公共字段**，因此 Kotlin 属性必须标注 `@JvmField`。
 - `TaskbarUngroupService.kt`：应用级 `@Service`；**即时路径**：AWT `WINDOW_OPENED/ACTIVATED` 事件（EDT）`Native.getComponentID` 直取 HWND → 后台线程 COM 应用；启动期窗口先显示后挂接项目（平台 `IdeProjectFrameAllocator` 并行流程），故对无项目窗口以 `javax.swing.Timer` 150ms 轮询等待挂接（上限 9 秒）；**兜底路径**：`WindowManager.getFrame(project)` 取 Frame 后同样经 peer 直取 HWND → 500ms×20 次窗口级自愈重试（JNA 迟到不提前放弃，成功后记录并停止）；**按窗口幂等、按项目复用 AUMID**（同项目第二个窗口沿用同一 AUMID，任务栏并入该项目按钮组）；`Memory.setWideString` 写入 `VT_LPWSTR` → `SetValue + Commit + Release`。
+- `ExternalAppWatcher.kt`：外部应用监视器——`scheduleWithFixedDelay` 2 秒全量 `EnumWindows`（微秒级，异常全捕获防周期任务夭折）；过滤不可见/无标题/工具窗口，跳过 IDE 自身进程；按文件名匹配配置的 exe → 每窗口唯一 AUMID（`TBG.X.<pid>.<hwnd>`）；diff 增量应用/撤销，失败重试上限 10 次；列表清空时后台尽力清空已写 AUMID。
+- `TaskbarUngroupSettings.kt`：应用级 `SimplePersistentStateComponent`（`taskbarUngroup.xml`，非漫游），`BaseState` 列表持久化；归一化匹配键 = exe 文件名小写。
+- `TaskbarUngroupConfigurable.kt`：Settings → Tools 设置页（`applicationConfigurable`），`JBList` + `ToolbarDecorator` + exe 文件选择器；Apply → 持久化并通知服务即时启停监视。
 - `TaskbarUngroupBootstrap.kt`：`AppLifecycleListener.appFrameCreated` 引导监听器（`<applicationListeners>` 惰性注册）。该消息由平台在决定打开首个窗口之前同步发布（见 `IdeStarter.openProjectIfNeeded`），因此首个项目窗口 `WINDOW_OPENED` 时 AWT 钩子已就绪，同样走即时路径；构造函数刻意零副作用，实例化安全性与发布时机无关。
 - `TaskbarUngroupStartupActivity.kt`：`ProjectActivity`（`postStartupActivity` 扩展点，触发兜底路径，并作为引导未生效时的服务实例化保险）。
 
@@ -69,6 +83,7 @@ CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编�
 - 窗口级 AUMID 只能在窗口显示之后改写：任务栏按钮会经历一次瞬时重组（新按钮替代原分组）。后续打开的项目在窗口出现动画之内完成（通常不可感知）；IDE 启动后的首个窗口因平台「先显示后挂项目」在加载早期完成（挂接后毫秒级，早于启动完成）。这是 Windows 任务栏对运行时重分组的固有行为，无法完全消除。
 - 极端情况下（窗口级 20 次重试仍失败，约 10 秒）放弃并记录 warn 日志。
 - AUMID 仅影响任务栏分组行为，不改变点击跳转/预览等其他任务栏交互。
+- 外部应用：改写 AUMID 后该应用的**任务栏固定（pin）关联会失效**（Windows 按默认 AUMID 关联固定项），移除配置并重开窗口后恢复；UWP/商店应用窗口归属 `ApplicationFrameHost.exe`，不支持按其真实应用名匹配；某些以管理员权限运行的进程可能拒绝映像名查询（该窗口被安全跳过）；按文件名匹配意味着同名不同路径的 exe 会同时生效。
 
 ## License
 

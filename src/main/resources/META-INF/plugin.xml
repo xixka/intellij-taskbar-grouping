@@ -8,14 +8,26 @@
         AppUserModelID, so Windows groups them into a single taskbar button. This plugin assigns each project window
         a unique <em>window-level</em> AppUserModelID (<code>PKEY_AppUserModel_ID</code>) right after the project opens,
         which makes the taskbar show one button per project &mdash; no external helper process required.</p>
+        <p><b>0.3.0:</b> optionally ungroup external applications too. Add their <code>.exe</code> under
+        <em>Settings &rarr; Tools &rarr; Taskbar Ungroup</em> and each of their windows gets its own taskbar button.
+        Matched by exe file name, applied via the documented Windows Shell window-property API (no process injection).</p>
         <ul>
             <li>Applies automatically within milliseconds of a project window opening (no IDE restart needed).</li>
             <li>Stable AppUserModelID derived from the project path hash &mdash; the same project always gets the same identity.</li>
+            <li>External applications: configure additional .exe files to ungroup their windows on the taskbar.</li>
             <li>Windows only; silently inactive on Linux/macOS.</li>
         </ul>
-        <p>中文说明：让每个 IntelliJ 项目窗口在 Windows 任务栏上显示为独立按钮（取消合并），同一项目标识稳定不变。</p>
+        <p>中文说明：让每个 IntelliJ 项目窗口在 Windows 任务栏上显示为独立按钮（取消合并），同一项目标识稳定不变；
+        0.3.0 起可在 设置 → Tools → Taskbar Ungroup 中添加其他应用的 .exe，使其窗口也各自独立成按钮（不注入进程）。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.3.0: new settings page (Settings &rarr; Tools &rarr; Taskbar Ungroup) — add external applications (.exe)
+        whose windows should be ungrouped on the taskbar. Each configured application's window gets a unique
+        window-level AppUserModelID (one taskbar button per window) via the documented Shell property API; windows are
+        matched by exe file name and tracked in a lightweight background sweep. Removing an entry restores default
+        grouping on a best-effort basis (reopen the app's windows to fully restore). Default behavior without any
+        configured entries is unchanged: IDEA project windows stay grouped per project. No process injection, no helper
+        process, no hooks.</p>
         <p>0.2.1: all windows of the same project now share the project's identity — previously only the first
         window of a project was ungrouped, so a second window (Open in New Window, torn-off editor tab) fell back
         into the default IDE group. The post-startup fallback no longer gives up when JNA is not yet loaded
@@ -32,6 +44,10 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="com.xixka.taskbarungroup.TaskbarUngroupStartupActivity"/>
+        <applicationConfigurable parentId="tools"
+                                 id="com.xixka.taskbarungroup.config"
+                                 instance="com.xixka.taskbarungroup.TaskbarUngroupConfigurable"
+                                 displayName="Taskbar Ungroup"/>
     </extensions>
 
     <applicationListeners>

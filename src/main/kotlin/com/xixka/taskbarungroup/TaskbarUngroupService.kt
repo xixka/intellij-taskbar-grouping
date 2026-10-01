@@ -59,6 +59,9 @@ class TaskbarUngroupService {
      */
     private val pendingWindows = Collections.newSetFromMap(ConcurrentHashMap<Window, Boolean>())
 
+    /** 外部应用取消分组（设置页配置的 exe；默认无配置、行为不变） */
+    private val externalWatcher = ExternalAppWatcher()
+
     init {
         // 注意：构造函数内不得触碰消息总线。若本服务在某个 topic 的惰性监听器
         // 构造/消息发布过程中被实例化，在总线订阅者表 computeIfAbsent 计算
@@ -70,7 +73,16 @@ class TaskbarUngroupService {
         if (SystemInfoRt.isWindows && !GraphicsEnvironment.isHeadless()) {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
         }
+        // 已配置过外部应用则启动监视（JNA 未就绪时 sweep 自行跳过，就绪后生效）
+        if (SystemInfoRt.isWindows && TaskbarUngroupSettings.getInstance().exeNamesLower().isNotEmpty()) {
+            externalWatcher.ensureStarted()
+        }
         log.info("Taskbar Ungroup: service initialized (AWT hook ${if (SystemInfoRt.isWindows) "registered" else "skipped (non-Windows)"})")
+    }
+
+    /** 设置页 apply 入口：外部应用列表变化 → 启动/停止监视并立即补扫 */
+    fun externalListChanged() {
+        externalWatcher.listChanged()
     }
 
     /**
