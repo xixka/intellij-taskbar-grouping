@@ -105,17 +105,26 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Start-Process -FilePath './gradlew.bat' -ArgumentList 'runIde', '--no-daemon', '--console=plain' `
             -WorkingDirectory (Get-Location) -RedirectStandardOutput 'ide-stdout.log' -RedirectStandardError 'ide-stderr.log'
-          # 无人值守 CI：自动识别并回车关闭首启同意类弹窗（数据共享等）
+          # 无人值守 CI：转储可见窗口标题（定位阻塞弹窗）+ 回车关闭 java 进程的模态弹窗
           $shell = New-Object -ComObject WScript.Shell
-          $dialogPattern = 'Data Sharing|Usage Statistic|anonymous|Privacy|consent'
-          $deadline = (Get-Date).AddSeconds(300)
+          $nativeDialogPattern = 'Security Alert|安全警报|Windows 安全|Firewall|防火墙'
+          $deadline = (Get-Date).AddSeconds(420)
+          $dumped = @{}
           while ((Get-Date) -lt $deadline) {
+            $uiWindows = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object Id, ProcessName, MainWindowTitle)
+            foreach ($w in $uiWindows) {
+              $sig = "$($w.ProcessName)|$($w.MainWindowTitle)"
+              if (-not $dumped.ContainsKey($sig)) {
+                $dumped[$sig] = $true
+                Write-Host "WINDOW: $sig (pid $($w.Id))"
+              }
+            }
             try {
-              $dlg = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match $dialogPattern } | Select-Object -First 1
+              $dlg = $uiWindows | Where-Object { ($_.ProcessName -eq 'java' -and $_.MainWindowTitle) -or ($_.MainWindowTitle -match $nativeDialogPattern) } | Select-Object -First 1
               if ($dlg -and $shell.AppActivate($dlg.Id)) {
-                Start-Sleep -Milliseconds 500
+                Start-Sleep -Milliseconds 400
                 $shell.SendKeys('{ENTER}')
-                Write-Host "Dismissed dialog: '$($dlg.MainWindowTitle)'"
+                Write-Host "Sent ENTER to: '$($dlg.MainWindowTitle)'"
               }
             } catch { }
             $log = Get-ChildItem 'build/idea-sandbox' -Recurse -Filter 'idea.log' -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -126,7 +135,9 @@ jobs:
             }
             Start-Sleep -Seconds 3
           }
-          Write-Host 'IDE boot timeout: plugin service not initialized within 300s'
+          Write-Host 'IDE boot timeout: plugin service not initialized within 420s'
+          Write-Host 'Final visible windows:'
+          foreach ($w in $uiWindows) { Write-Host "  $($w.ProcessName): '$($w.MainWindowTitle)'" }
           exit 1
 
       - name: Launch notepad windows and assert AUMID assignment
