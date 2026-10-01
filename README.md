@@ -55,7 +55,12 @@ IntelliJ 是单进程多窗口应用，所有项目窗口共享同一个进程�
 ./gradlew runIde        # Windows 上本地沙箱验证
 ```
 
-CI（GitHub Actions，`.github/workflows/ci.yml`）以 `buildPlugin` 作为编译验证：`ubuntu-latest + JDK 17 + setup-gradle`，Gradle 依赖与 ideaIC 发行版均走缓存。
+CI（GitHub Actions，`.github/workflows/ci.yml`，参照 JetBrains 官方插件模板的三段结构）：
+- **build**（ubuntu）：`test buildPlugin verifyPlugin`，产物与 Plugin Verifier 报告上传 artifact；
+- **windows-smoke**（windows-latest，功能级实测）：预置 `taskbarUngroup.xml`（配置 notepad.exe）→ 沙箱启动真实 IDE → 双开记事本 → 以 `SHGetPropertyStoreForWindow` 读取窗口 AUMID 断言 `TBG.X.` 前缀写入成功（`.github/scripts/taskbar-aumid-check.ps1`，与插件写入端互为镜像）；
+- **dev-release**（仅 master 推送，依赖前两 job 通过）：把 build 产物发布到 GitHub `dev` release。
+
+`release.yml` 为手动触发的 Marketplace 上架工作流（`verifyPlugin publishPlugin`）。
 
 ### 版本矩阵（及选型说明）
 
