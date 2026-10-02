@@ -78,11 +78,14 @@ jobs:
           Write-Host "Sandbox root: $sandboxRoot"
           $optionsDir = Join-Path $sandboxRoot 'config/options'
           New-Item -ItemType Directory -Force -Path $optionsDir | Out-Null
+          # 权威格式（XmlSerializer 单测实证）：List 属性需 <list> 包裹条目
           $xml = @'
           <application>
             <component name="TaskbarUngroup">
               <option name="exeEntries">
-                <option value="C:\Windows\System32\notepad.exe" />
+                <list>
+                  <option value="C:\Windows\System32\notepad.exe" />
+                </list>
               </option>
             </component>
           </application>

@@ -23,7 +23,9 @@ class TaskbarUngroupSettingsFormatTest {
         <application>
           <component name="TaskbarUngroup">
             <option name="exeEntries">
-              <option value="C:\Windows\System32\notepad.exe" />
+              <list>
+                <option value="C:\Windows\System32\notepad.exe" />
+              </list>
             </option>
           </component>
         </application>
