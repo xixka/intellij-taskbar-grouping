@@ -81,7 +81,7 @@ public static class AumidReader
             try
             {
                 PROPERTYKEY key = new PROPERTYKEY();
-                key.fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE4D440"); // PKEY_AppUserModel_ID
+                key.fmtid = new Guid("9F4C2855-EE22-4C80-9C1A-1D6CE9F6D1CE"); // PKEY_AppUserModel_ID 官方 FMTID（原 GUID 写错导致恒读空值）
                 key.pid = 5;
                 PROPVARIANT v;
                 int hr = store.GetValue(ref key, out v);
