@@ -1,9 +1,10 @@
 package com.xixka.taskbarungroup
 
-import com.intellij.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
 import org.jdom.Element
 import org.jdom.input.SAXBuilder
+import org.jdom.output.Format
+import org.jdom.output.XMLOutputter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -36,7 +37,7 @@ class TaskbarUngroupSettingsFormatTest {
         val component = Element("component").setAttribute("name", "TaskbarUngroup")
         XmlSerializer.serializeInto(populated, component)
 
-        val canonical = JDOMUtil.writeElement(component)
+        val canonical = XMLOutputter(Format.getPrettyFormat()).outputString(component)
         println("TASKBAR-UNGROUP-CANONICAL-XML:\n$canonical")
 
         val back = TaskbarUngroupSettings.Persistent()
