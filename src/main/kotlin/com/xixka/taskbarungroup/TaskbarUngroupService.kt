@@ -20,6 +20,7 @@ import java.awt.Window
 import java.awt.event.WindowEvent
 import java.security.MessageDigest
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -77,7 +78,7 @@ class TaskbarUngroupService {
         }
         // 已配置过外部应用则启动监视（JNA 未就绪时 sweep 自行跳过，就绪后生效）
         val loadedTargets = TaskbarUngroupSettings.getInstance().exeNamesLower()
-        val stateFile = PathManager.getConfigPath().toPath().resolve("options/taskbarUngroup.xml")
+        val stateFile = Paths.get(PathManager.getConfigPath(), "options", "taskbarUngroup.xml")
         log.info(
             "Taskbar Ungroup: settings loaded (matchKeys=$loadedTargets, " +
                 "entries=${TaskbarUngroupSettings.getInstance().entryPaths()}, " +
