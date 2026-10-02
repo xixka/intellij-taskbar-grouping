@@ -74,7 +74,12 @@ class TaskbarUngroupService {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
         }
         // 已配置过外部应用则启动监视（JNA 未就绪时 sweep 自行跳过，就绪后生效）
-        if (SystemInfoRt.isWindows && TaskbarUngroupSettings.getInstance().exeNamesLower().isNotEmpty()) {
+        val loadedTargets = TaskbarUngroupSettings.getInstance().exeNamesLower()
+        log.info(
+            "Taskbar Ungroup: settings loaded (matchKeys=$loadedTargets, " +
+                "entries=${TaskbarUngroupSettings.getInstance().entryPaths()})",
+        )
+        if (SystemInfoRt.isWindows && loadedTargets.isNotEmpty()) {
             externalWatcher.ensureStarted()
         }
         log.info("Taskbar Ungroup: service initialized (AWT hook ${if (SystemInfoRt.isWindows) "registered" else "skipped (non-Windows)"})")

@@ -88,6 +88,10 @@ jobs:
           </application>
           '@
           Set-Content -Path (Join-Path $optionsDir 'taskbarUngroup.xml') -Value $xml -Encoding UTF8
+          # 双保险：同时预置 system/options（RoamingType.DISABLED 的实际落点以 IDE 为准）
+          $sysOptionsDir = Join-Path $sandboxRoot 'system/options'
+          New-Item -ItemType Directory -Force -Path $sysOptionsDir | Out-Null
+          Set-Content -Path (Join-Path $sysOptionsDir 'taskbarUngroup.xml') -Value $xml -Encoding UTF8
           # 预置 FUS 同意状态（组件名如不匹配会被 IDE 忽略，无副作用）
           $fus = @'
           <application>
@@ -207,6 +211,15 @@ jobs:
         run: |
           Get-ChildItem 'build/idea-sandbox' -Recurse -Filter 'idea.log' -ErrorAction SilentlyContinue |
             ForEach-Object { Copy-Item $_.FullName "idea-$($_.Directory.Parent.Name).log" }
+          Get-ChildItem 'build/idea-sandbox' -Recurse -Filter '*.xml' -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'options' } |
+            ForEach-Object { Copy-Item $_.FullName "opts-$($_.Name)" -Force }
+          Write-Host '--- sandbox tree ---'
+          Get-ChildItem 'build/idea-sandbox' -Recurse -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          Write-Host '--- taskbarUngroup.xml (config) ---'
+          Get-Content 'build/idea-sandbox/*/config/options/taskbarUngroup.xml' -ErrorAction SilentlyContinue
+          Write-Host '--- taskbarUngroup.xml (system) ---'
+          Get-Content 'build/idea-sandbox/*/system/options/taskbarUngroup.xml' -ErrorAction SilentlyContinue
           Get-Content 'ide-stderr.log' -ErrorAction SilentlyContinue | Select-Object -Last 30
 
       - name: Upload IDE logs on failure
@@ -218,6 +231,7 @@ jobs:
             idea-*.log
             ide-stdout.log
             ide-stderr.log
+            opts-*.xml
           if-no-files-found: ignore
 
       - name: Cleanup IDE and notepad

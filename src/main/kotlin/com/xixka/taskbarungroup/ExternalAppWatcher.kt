@@ -37,6 +37,9 @@ internal class ExternalAppWatcher {
 
     private val sweepLock = Any()
 
+    /** JNA 未就绪提示只记一次 */
+    private var jnaMissingLogged = false
+
     /** 已受理（成功或放弃）的窗口 hwnd 集合，避免每轮重复应用 */
     private val handled = ConcurrentHashMap.newKeySet<Long>()
 
@@ -106,7 +109,14 @@ internal class ExternalAppWatcher {
     }
 
     private fun doSweep() {
-        if (!SystemInfoRt.isWindows || !JnaLoader.isLoaded()) return
+        if (!SystemInfoRt.isWindows) return
+        if (!JnaLoader.isLoaded()) {
+            if (!jnaMissingLogged) {
+                jnaMissingLogged = true
+                log.info("Taskbar Ungroup: JNA not loaded yet, external sweeps idle until ready")
+            }
+            return
+        }
         val targets = TaskbarUngroupSettings.getInstance().exeNamesLower()
         if (targets.isEmpty()) return
 
