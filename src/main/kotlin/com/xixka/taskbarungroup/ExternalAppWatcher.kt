@@ -40,6 +40,9 @@ internal class ExternalAppWatcher {
     /** JNA 未就绪提示只记一次 */
     private var jnaMissingLogged = false
 
+    /** 诊断：sweep 轮次计数 */
+    private var sweepCount = 0
+
     /** 已受理（成功或放弃）的窗口 hwnd 集合，避免每轮重复应用 */
     private val handled = ConcurrentHashMap.newKeySet<Long>()
 
@@ -121,24 +124,38 @@ internal class ExternalAppWatcher {
         if (targets.isEmpty()) return
 
         synchronized(sweepLock) {
+            sweepCount++
             val selfPid = Kernel32.INSTANCE.GetCurrentProcessId()
             val matched = HashMap<Long, Int>()
+            var visited = 0
+            var titled = 0
+            var noImage = 0
+            val seenExes = LinkedHashMap<String, Int>()
 
             User32.INSTANCE.EnumWindows(User32.WNDENUMPROC { hwnd, _ ->
                 try {
+                    visited++
                     if (User32.INSTANCE.IsWindowVisible(hwnd) &&
                         User32.INSTANCE.GetWindowTextLengthW(hwnd) > 0 &&
                         User32.INSTANCE.GetWindowLongW(hwnd, User32.GWL_EXSTYLE_INDEX) and
                             User32.WS_EX_TOOLWINDOW_MASK == 0
                     ) {
+                        titled++
                         val pidRef = IntByReference()
                         User32.INSTANCE.GetWindowThreadProcessId(hwnd, pidRef)
                         val pid = pidRef.value
                         // 跳过 IDE 自身进程：项目窗口由事件路径负责（语义为按项目分组）
                         if (pid > 0 && pid != selfPid) {
-                            val exeName = processImageFileName(pid)?.lowercase()?.substringAfterLast('\\')
-                            if (exeName != null && exeName in targets) {
-                                matched[hwnd] = pid
+                            val imagePath = processImageFileName(pid)
+                            if (imagePath == null) {
+                                noImage++
+                                log.warn("Taskbar Ungroup: no image name for pid $pid (hwnd 0x${java.lang.Long.toHexString(hwnd)})")
+                            } else {
+                                val exeName = imagePath.lowercase().substringAfterLast('\\')
+                                seenExes.merge(exeName, 1, Int::plus)
+                                if (exeName in targets) {
+                                    matched[hwnd] = pid
+                                }
                             }
                         }
                     }
@@ -147,6 +164,10 @@ internal class ExternalAppWatcher {
                 }
                 true
             }, 0L)
+            log.info(
+                "Taskbar Ungroup: sweep #$sweepCount visited=$visited titled=$titled " +
+                    "noImage=$noImage matched=${matched.size} seenExes=${seenExes.keys}",
+            )
 
             // 撤销：已受理但不再匹配（配置移除 / 窗口换了进程 / 配置整体清空）的窗口
             for (hwnd in handled) {

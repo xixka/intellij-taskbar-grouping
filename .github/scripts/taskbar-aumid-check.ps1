@@ -113,6 +113,15 @@ function Get-TargetWindows
         ForEach-Object { [pscustomobject]@{ Pid = $_.Id; Handle = $_.MainWindowHandle; Title = $_.MainWindowTitle } }
 }
 
+# 基线自证：读出所有可见顶层窗口的 AUMID。
+# IDE 自身窗口此时应已带 TBG.IDEA.*（插件事件路径写入，idea.log 有实证）；
+# 若基线中 java 窗口 AUMID 为空 → 读取器自身有问题；若能读出 → 插件 sweep 有问题。
+Write-Host "[baseline] all visible top-level windows (aumid via SHGetPropertyStoreForWindow):"
+Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object {
+    $a = [AumidReader]::GetWindowAumid([IntPtr]$_.MainWindowHandle)
+    Write-Host ("  pid={0} proc={1} title='{2}' aumid='{3}'" -f $_.Id, $_.ProcessName, $_.MainWindowTitle, $a)
+}
+
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $attempt = 0
 do {
