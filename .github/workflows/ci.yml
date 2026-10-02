@@ -99,6 +99,33 @@ jobs:
           Set-Content -Path (Join-Path $optionsDir 'usages-statistics.xml') -Value $fus -Encoding UTF8
           Get-Content (Join-Path $optionsDir 'taskbarUngroup.xml')
 
+      - name: Seed EUA acceptance state (suppress User Agreement dialog)
+        # 根因（EndUserAgreement.java/Prefs.java 源码确认）：首启「IntelliJ IDEA User Agreement」
+        # 弹窗由 java.util.prefs 接受版本号判定，社区版键为 euaCommunity_accepted_version。
+        # 用 Java 写入以自动处理 JDK 的 Windows 注册表名称编码，避免直写注册表踩坑。
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import java.util.prefs.Preferences;
+
+          public class SeedEua {
+              public static void main(String[] args) throws Exception {
+                  Preferences p = Preferences.userRoot().node("jetbrains/privacy_policy");
+                  // ideaIC document name is "euaCommunity" -> value name lowercased
+                  p.put("euacommunity_accepted_version", "999.999");
+                  // harmless extras for other product variants
+                  p.put("eua_accepted_version", "999.999");
+                  p.put("ij_euaeap_accepted_version", "999.999");
+                  p.put("accepted_version", "999.999");
+                  p.flush();
+                  System.out.println("EUA acceptance seeded: " + p.get("euacommunity_accepted_version", null));
+              }
+          }
+          '@ | Set-Content -Path SeedEua.java -Encoding ASCII
+          javac SeedEua.java
+          java SeedEua
+
       - name: Boot sandbox IDE in background
         shell: pwsh
         run: |
