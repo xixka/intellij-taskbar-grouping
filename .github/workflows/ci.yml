@@ -138,7 +138,11 @@ jobs:
           Set-Content -Path (Join-Path $consentDir 'accepted') -Value 'rsch.send.usage.stat:999.999:1:0' -Encoding ASCII
           Write-Host "consent seeded: $(Get-Content (Join-Path $consentDir 'accepted'))"
 
-      - name: Boot sandbox IDE in background
+      - name: Boot sandbox IDE, launch notepad, assert AUMID (single process tree)
+        # 关键：IDE 与断言必须在同一步骤内（同一进程树）。
+        # 实证（run 37018190454）：boot 步骤退出后 runner 清理其进程树，
+        # IDE 在数秒内被终止——sweep 停止、java 窗口从基线消失，而 notepad
+        # 属下一步进程树得以存活。合并后断言全程有 IDE 在场。
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -155,12 +159,13 @@ jobs:
           '@ | Set-Content -Path ci-init.gradle -Encoding ASCII
           Start-Process -FilePath './gradlew.bat' -ArgumentList 'runIde', '-I', 'ci-init.gradle', '--no-daemon', '--console=plain' `
             -WorkingDirectory (Get-Location) -RedirectStandardOutput 'ide-stdout.log' -RedirectStandardError 'ide-stderr.log'
-          # 无人值守 CI：转储可见窗口标题（定位阻塞弹窗）+ 回车关闭 java 进程的模态弹窗
+          # 无人值守 CI：转储可见窗口标题（定位阻塞弹窗）+ 按键关闭 java 进程的模态弹窗
           $shell = New-Object -ComObject WScript.Shell
           $nativeDialogPattern = 'Security Alert|安全警报|Windows 安全|Firewall|防火墙'
           $deadline = (Get-Date).AddSeconds(420)
           $dumped = @{}
           $attempt = 0
+          $uiWindows = @()
           while ((Get-Date) -lt $deadline) {
             $uiWindows = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object Id, ProcessName, MainWindowTitle)
             foreach ($w in $uiWindows) {
@@ -186,23 +191,23 @@ jobs:
             $log = Get-ChildItem 'build/idea-sandbox' -Recurse -Filter 'idea.log' -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($log -and (Select-String -Path $log.FullName -Pattern 'Taskbar Ungroup: service initialized' -Quiet -ErrorAction SilentlyContinue)) {
               Write-Host "IDE booted, plugin service initialized (log: $($log.FullName))"
-              Start-Sleep -Seconds 10
-              exit 0
+              break
             }
             Start-Sleep -Seconds 3
           }
-          Write-Host 'IDE boot timeout: plugin service not initialized within 420s'
-          Write-Host 'Final visible windows:'
-          foreach ($w in $uiWindows) { Write-Host "  $($w.ProcessName): '$($w.MainWindowTitle)'" }
-          exit 1
+          if (-not ($log -and (Select-String -Path $log.FullName -Pattern 'Taskbar Ungroup: service initialized' -Quiet -ErrorAction SilentlyContinue))) {
+            Write-Host 'IDE boot timeout: plugin service not initialized within 420s'
+            Write-Host 'Final visible windows:'
+            foreach ($w in $uiWindows) { Write-Host "  $($w.ProcessName): '$($w.MainWindowTitle)'" }
+            exit 1
+          }
 
-      - name: Launch notepad windows and assert AUMID assignment
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
+          # ---- 同进程树内执行外部应用冒烟断言 ----
+          Start-Sleep -Seconds 5   # 等待 JNA 就绪与欢迎屏稳定
           Start-Process notepad
           Start-Process notepad
           Start-Sleep -Seconds 3
+          $ErrorActionPreference = 'Continue'
           .github/scripts/taskbar-aumid-check.ps1 -ProcessNames notepad -MinWindows 2 -TimeoutSeconds 60
           $result = $LASTEXITCODE
           if ($result -ne 0) { Get-Content 'ide-stdout.log' -Tail 50 -ErrorAction SilentlyContinue }
