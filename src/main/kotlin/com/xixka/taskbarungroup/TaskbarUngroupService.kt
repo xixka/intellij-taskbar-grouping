@@ -3,6 +3,7 @@ package com.xixka.taskbarungroup
 import com.intellij.jna.JnaLoader
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -18,6 +19,7 @@ import java.awt.Toolkit
 import java.awt.Window
 import java.awt.event.WindowEvent
 import java.security.MessageDigest
+import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -75,12 +77,26 @@ class TaskbarUngroupService {
         }
         // 已配置过外部应用则启动监视（JNA 未就绪时 sweep 自行跳过，就绪后生效）
         val loadedTargets = TaskbarUngroupSettings.getInstance().exeNamesLower()
+        val stateFile = PathManager.getConfigPath().resolve("options/taskbarUngroup.xml")
         log.info(
             "Taskbar Ungroup: settings loaded (matchKeys=$loadedTargets, " +
-                "entries=${TaskbarUngroupSettings.getInstance().entryPaths()})",
+                "entries=${TaskbarUngroupSettings.getInstance().entryPaths()}, " +
+                "stateFile exists=${Files.exists(stateFile)} at $stateFile)",
         )
         if (SystemInfoRt.isWindows && loadedTargets.isNotEmpty()) {
             externalWatcher.ensureStarted()
+        } else if (loadedTargets.isEmpty()) {
+            // 启动极早期（appFrameCreated 阶段）实例化的服务可能早于 store 装载外部化组件：
+            // 延迟复检一次（幂等；若配置此刻可见则启动 watcher 并立即补扫）
+            AppExecutorUtil.getAppScheduledExecutorService().schedule({
+                try {
+                    val reloaded = TaskbarUngroupSettings.getInstance().exeNamesLower()
+                    log.info("Taskbar Ungroup: deferred settings re-check (matchKeys=$reloaded)")
+                    if (SystemInfoRt.isWindows) externalWatcher.listChanged()
+                } catch (t: Throwable) {
+                    log.warn("Taskbar Ungroup: deferred settings re-check failed", t)
+                }
+            }, 20, TimeUnit.SECONDS)
         }
         log.info("Taskbar Ungroup: service initialized (AWT hook ${if (SystemInfoRt.isWindows) "registered" else "skipped (non-Windows)"})")
     }

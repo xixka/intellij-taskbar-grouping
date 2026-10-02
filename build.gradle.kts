@@ -21,6 +21,16 @@ dependencies {
         intellijIdeaCommunity("2024.1.7")
         pluginVerifier()
     }
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.test {
+    testLogging {
+        events("failed", "skipped")
+        showStandardStreams = true
+        showExceptions = true
+        showCauses = true
+    }
 }
 
 intellijPlatform {
