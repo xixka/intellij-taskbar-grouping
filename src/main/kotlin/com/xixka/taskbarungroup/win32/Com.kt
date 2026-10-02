@@ -36,13 +36,16 @@ class GUID(
             ),
         )
 
-        /** PKEY_AppUserModel_ID 的 FMTID {9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3} */
+        /** PKEY_AppUserModel_ID 的 FMTID（官方：propkey.h / MSDN）
+         *  {9F4C2855-EE22-4C80-9C1A-1D6CE9F6D1CE}，PID=5。
+         *  注意：此前误用了伪造 GUID，写属性虽返回 S_OK 但任务栏从不读取该键，
+         *  实际取消分组从未生效（CI 冒烟实证：官方键读取恒为空）。 */
         @JvmField
         val FMTID_APPUSERMODEL_ID = GUID(
-            0x9F4C2855, 0x9F79, 0x4B39,
+            0x9F4C2855, 0xEE22, 0x4C80,
             byteArrayOf(
-                0xA8.toByte(), 0xD0.toByte(), 0xE1.toByte(), 0xD4.toByte(),
-                0x2D, 0xE1.toByte(), 0xD5.toByte(), 0xF3.toByte(),
+                0x9C.toByte(), 0x1A.toByte(), 0x1D.toByte(), 0x6C.toByte(),
+                0xE9.toByte(), 0xF6.toByte(), 0xD1.toByte(), 0xCE.toByte(),
             ),
         )
     }
