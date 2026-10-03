@@ -43,6 +43,9 @@ internal class ExternalAppWatcher {
     /** 诊断：sweep 轮次计数 */
     private var sweepCount = 0
 
+    /** 诊断：上次摘要日志时的匹配窗口数（仅变化时记录，避免刷屏） */
+    private var lastLoggedMatched = -1
+
     /** 已受理（成功或放弃）的窗口 hwnd 集合，避免每轮重复应用 */
     private val handled = ConcurrentHashMap.newKeySet<Long>()
 
@@ -164,10 +167,14 @@ internal class ExternalAppWatcher {
                 }
                 true
             }, 0L)
-            log.info(
-                "Taskbar Ungroup: sweep #$sweepCount visited=$visited titled=$titled " +
-                    "noImage=$noImage matched=${matched.size} seenExes=${seenExes.keys}",
-            )
+            // 摘要仅在匹配数变化时记录（CI 排障足够，生产不刷屏）
+            if (matched.size != lastLoggedMatched) {
+                lastLoggedMatched = matched.size
+                log.info(
+                    "Taskbar Ungroup: sweep #$sweepCount visited=$visited titled=$titled " +
+                        "noImage=$noImage matched=${matched.size} seenExes=${seenExes.keys}",
+                )
+            }
 
             // 撤销：已受理但不再匹配（配置移除 / 窗口换了进程 / 配置整体清空）的窗口
             for (hwnd in handled) {
