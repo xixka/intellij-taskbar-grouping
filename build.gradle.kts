@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.xixka"
-version = "0.3.1"
+version = "0.4.0"
 
 repositories {
     mavenCentral()
@@ -36,14 +36,20 @@ tasks.test {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "241"
+            // 下限 2022.3（build 223）：所用平台 API（AppLifecycleListener、
+            // PersistentStateComponent、ProjectManagerListener 等）均早于 223 存在；
+            // @Service 用无参形式（Service.Level 枚举 2023.1 才引入）。
+            // 编译目标仍为 ideaIC 2024.1.7（低于编译目标的 sinceBuild 是常规做法）。
+            sinceBuild = "223"
             // 上限基于 Plugin Verifier 对 IntelliJ IDEA 2026.2.3 (build 262.*) 的实际验证结果
             untilBuild = "262.*"
         }
     }
     pluginVerification {
         ides {
-            // 支持区间下限：编译目标 ideaIC 2024.1.7（IC 自 2025.3 起不再是可验证目标）
+            // 支持区间下限：ideaIC 2022.3.3（IC 自 2025.3 起不再是可验证目标）
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2022.3.3")
+            // 编译目标同源版本：ideaIC 2024.1.7
             create(IntelliJPlatformType.IntellijIdeaCommunity, "2024.1.7")
             // 支持区间上限：当前最新 IntelliJ IDEA 2026.2.3（build 262.*，新 IntellijIdea 类型）
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")

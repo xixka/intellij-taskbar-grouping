@@ -56,5 +56,23 @@ class TaskbarUngroupSettingsFormatTest {
         println("TASKBAR-UNGROUP-SEEDED-PARSED: ${state.exeEntries}")
         assertFalse("预置的 taskbarUngroup.xml 应能反序列化出非空 exeEntries", state.exeEntries.isEmpty())
         assertEquals(listOf("C:\\Windows\\System32\\notepad.exe"), state.exeEntries)
+        assertFalse("0.3.x 旧 XML 无 matchFullPath 标志 → 默认按文件名匹配", state.matchFullPath)
+    }
+
+    @Test
+    fun `full-path flag round-trips through platform serializer`() {
+        val populated = TaskbarUngroupSettings.Persistent().apply {
+            exeEntries = mutableListOf("C:\\Windows\\System32\\notepad.exe")
+            matchFullPath = true
+        }
+        val component = Element("component").setAttribute("name", "TaskbarUngroup")
+        XmlSerializer.serializeInto(populated, component)
+        val canonical = XMLOutputter(Format.getPrettyFormat()).outputString(component)
+        println("TASKBAR-UNGROUP-CANONICAL-XML-FULLPATH:\n$canonical")
+
+        val back = TaskbarUngroupSettings.Persistent()
+        XmlSerializer.deserializeInto(back, component)
+        assertEquals(populated.matchFullPath, back.matchFullPath)
+        assertEquals(populated.exeEntries, back.exeEntries)
     }
 }

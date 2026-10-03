@@ -27,6 +27,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # IDE 分发（编译目标 + 3 个 verifier 目标）与解包 transforms 缓存，
+      # 键含 build.gradle.kts（IDE 版本钉死于此）与 Gradle 版本（wrapper）
+      - name: Cache IDE distributions and transforms
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/caches/transforms
+          key: ${{ runner.os }}-intellij-dists-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-intellij-dists-
+
       - name: Build, test and verify plugin
         run: ./gradlew test buildPlugin verifyPlugin --stacktrace --no-daemon
 
@@ -63,6 +74,16 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      # 沙箱 IDE（ideaIC 分发 + 解包 transforms）缓存：此前每次全新下载 ~800 MB
+      - name: Cache sandbox IDE distribution
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/caches/transforms
+          key: ${{ runner.os }}-intellij-dists-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-intellij-dists-
 
       - name: Prepare sandbox IDE with plugin
         shell: pwsh

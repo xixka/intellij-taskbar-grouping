@@ -40,7 +40,7 @@ import javax.swing.Timer
  * 不做标题枚举匹配——同进程内两个同名项目会产生相同标题，按标题匹配存在
  * 跨窗口误绑定的歧义。
  */
-@Service(Service.Level.APP)
+@Service
 class TaskbarUngroupService {
 
     private val log = Logger.getInstance(TaskbarUngroupService::class.java)
@@ -77,22 +77,22 @@ class TaskbarUngroupService {
             Toolkit.getDefaultToolkit().addAWTEventListener(::onAwtEvent, AWTEvent.WINDOW_EVENT_MASK)
         }
         // 已配置过外部应用则启动监视（JNA 未就绪时 sweep 自行跳过，就绪后生效）
-        val loadedTargets = TaskbarUngroupSettings.getInstance().exeNamesLower()
+        val loadedTargets = TaskbarUngroupSettings.getInstance().targetKeys()
         val stateFile = Paths.get(PathManager.getConfigPath(), "options", "taskbarUngroup.xml")
         log.info(
-            "Taskbar Ungroup: settings loaded (matchKeys=$loadedTargets, " +
+            "Taskbar Ungroup: settings loaded (mode=${loadedTargets.mode}, matchKeys=${loadedTargets.keys}, " +
                 "entries=${TaskbarUngroupSettings.getInstance().entryPaths()}, " +
                 "stateFile exists=${Files.exists(stateFile)} at $stateFile)",
         )
-        if (SystemInfoRt.isWindows && loadedTargets.isNotEmpty()) {
+        if (SystemInfoRt.isWindows && !loadedTargets.isEmpty) {
             externalWatcher.ensureStarted()
-        } else if (loadedTargets.isEmpty()) {
+        } else if (loadedTargets.isEmpty) {
             // 启动极早期（appFrameCreated 阶段）实例化的服务可能早于 store 装载外部化组件：
             // 延迟复检一次（幂等；若配置此刻可见则启动 watcher 并立即补扫）
             AppExecutorUtil.getAppScheduledExecutorService().schedule({
                 try {
-                    val reloaded = TaskbarUngroupSettings.getInstance().exeNamesLower()
-                    log.info("Taskbar Ungroup: deferred settings re-check (matchKeys=$reloaded)")
+                    val reloaded = TaskbarUngroupSettings.getInstance().targetKeys()
+                    log.info("Taskbar Ungroup: deferred settings re-check (mode=${reloaded.mode}, matchKeys=${reloaded.keys})")
                     if (SystemInfoRt.isWindows) externalWatcher.listChanged()
                 } catch (t: Throwable) {
                     log.warn("Taskbar Ungroup: deferred settings re-check failed", t)
@@ -276,26 +276,8 @@ class TaskbarUngroupService {
      * 形如 CompanyName.ProductName.SubProduct。产品名（如 "IntelliJ IDEA"）
      * 含空格等非法字符，需先过滤为 ASCII 字母数字/连字符。
      */
-    private fun buildAumid(project: Project): String {
-        val product = sanitizeAumidSegment(ApplicationNamesInfo.getInstance().productName)
-        val path = project.basePath ?: project.name
-        val hash = MessageDigest.getInstance("SHA-256")
-            .digest(path.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-            .take(AUMID_HASH_LENGTH)
-        return "TBG.$product.$hash".take(AUMID_MAX_LENGTH)
-    }
-
-    private fun sanitizeAumidSegment(raw: String): String {
-        val sanitized = buildString {
-            for (c in raw) {
-                if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-') {
-                    append(c)
-                }
-            }
-        }
-        return sanitized.ifEmpty { "IDEA" }
-    }
+    private fun buildAumid(project: Project): String =
+        projectAumid(ApplicationNamesInfo.getInstance().productName, project.basePath ?: project.name)
 
     companion object {
         private const val S_OK = 0
@@ -305,6 +287,31 @@ class TaskbarUngroupService {
         private const val AUMID_MAX_LENGTH = 128
         private const val PENDING_POLL_MS = 150
         private const val PENDING_MAX_POLLS = 60
+
+        /**
+         * 纯函数 AUMID 构造（无平台依赖，可单测）：
+         * `TBG.<净化产品段>.<项目路径 SHA-256 前 32 位>`。
+         * 产品段参与 AUMID → 不同 IDE（IDEA/PyCharm）同路径打开也绝不并入同组。
+         */
+        internal fun projectAumid(productName: String, projectPath: String): String {
+            val product = sanitizeAumidSegment(productName)
+            val hash = MessageDigest.getInstance("SHA-256")
+                .digest(projectPath.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+                .take(AUMID_HASH_LENGTH)
+            return "TBG.$product.$hash".take(AUMID_MAX_LENGTH)
+        }
+
+        private fun sanitizeAumidSegment(raw: String): String {
+            val sanitized = buildString {
+                for (c in raw) {
+                    if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-') {
+                        append(c)
+                    }
+                }
+            }
+            return sanitized.ifEmpty { "IDEA" }
+        }
 
         fun getInstance(): TaskbarUngroupService =
             ApplicationManager.getApplication().getService(TaskbarUngroupService::class.java)

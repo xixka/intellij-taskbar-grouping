@@ -68,3 +68,26 @@ private fun doSetWindowAumid(hwnd: Pointer, aumid: String): Int {
         IPropertyStore.release(store)
     }
 }
+
+/** SetWindowPos 的 no-op 坐标标志（仅触发非客户区重算） */
+private const val SWP_NOSIZE = 0x0001
+private const val SWP_NOMOVE = 0x0002
+private const val SWP_NOZORDER = 0x0004
+private const val SWP_NOACTIVATE = 0x0010
+private const val SWP_FRAMECHANGED = 0x0020
+
+/**
+ * 触发一次窗口非客户区重算（坐标/尺寸/Z 序/激活全为 no-op）。
+ * 清空 AUMID 后调用：促使任务栏立即重估该窗口的分组归属，
+ * 而非等待下一次窗口重绘或应用重开（撤销路径的 best-effort 收尾）。
+ * 与 [setWindowAumid] 一样须在 [win32Lock] 之外单独调用（纯 user32 调用，无 COM 状态）。
+ */
+fun nudgeWindowFrame(hwnd: Pointer): Boolean {
+    val hr = User32.INSTANCE.SetWindowPos(
+        Pointer.nativeValue(hwnd),
+        0,
+        0, 0, 0, 0,
+        SWP_NOSIZE or SWP_NOMOVE or SWP_NOZORDER or SWP_NOACTIVATE or SWP_FRAMECHANGED,
+    )
+    return hr
+}

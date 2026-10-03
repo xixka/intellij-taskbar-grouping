@@ -14,13 +14,26 @@
         <ul>
             <li>Applies automatically within milliseconds of a project window opening (no IDE restart needed).</li>
             <li>Stable AppUserModelID derived from the project path hash &mdash; the same project always gets the same identity.</li>
-            <li>External applications: configure additional .exe files to ungroup their windows on the taskbar.</li>
+            <li>External applications: configure additional .exe files to ungroup their windows on the taskbar (file-name or full-path matching; real-time since 0.4.0).</li>
             <li>Windows only; silently inactive on Linux/macOS.</li>
         </ul>
         <p>中文说明：让每个 IntelliJ 项目窗口在 Windows 任务栏上显示为独立按钮（取消合并），同一项目标识稳定不变；
-        0.3.0 起可在 设置 → Tools → Taskbar Ungroup 中添加其他应用的 .exe，使其窗口也各自独立成按钮（不注入进程）。</p>
+        0.3.0 起可在 设置 → Tools → Taskbar Ungroup 中添加其他应用的 .exe，使其窗口也各自独立成按钮（不注入进程）；
+        0.4.0 起外部应用窗口实时生效（WinEvent 事件订阅）、可选完整路径匹配、兼容 2022.3 起的 IDE。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.4.0: real-time external-window detection via an out-of-context WinEvent subscription
+        (SetWinEventHook, EVENT_OBJECT_SHOW) delivered through the AWT message pump &mdash; new external windows are
+        ungrouped the moment they appear instead of on the next 2-second sweep (the sweep remains as a fallback,
+        and hook installation failure degrades gracefully to polling-only 0.3.x behavior). New optional
+        full-path matching mode for external applications (exact install path instead of file name, eliminating
+        same-name .exe false hits; default remains file-name matching for 0.3.x compatibility). Removing an
+        entry now nudges affected windows (SWP_FRAMECHANGED) after clearing the AUMID so the taskbar can restore
+        default grouping without reopening the app. Settings page warns when a JetBrains IDE executable
+        (idea64.exe etc.) is configured as an external application, since that conflicts with per-project
+        grouping. Compatibility range widened to 2022.3&ndash;2026.2.3 (builds 223&ndash;262, verified). Added
+        CHANGELOG.md and unit tests for AUMID construction and matching semantics; CI now caches IDE
+        distributions to shorten verification runs.</p>
         <p>0.3.1 (critical fix): the AppUserModelID was written under a wrong property key (FMTID), so Windows
         never read it — taskbar ungrouping did not actually take effect in 0.3.0. Now writes the official
         PKEY_AppUserModel_ID ({9F4C2855-EE22-4C80-9C1A-1D6CE9F6D1CE}); verified end-to-end on a real Windows
@@ -49,7 +62,6 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <postStartupActivity implementation="com.xixka.taskbarungroup.TaskbarUngroupStartupActivity"/>
         <applicationConfigurable parentId="tools"
                                  id="com.xixka.taskbarungroup.config"
                                  instance="com.xixka.taskbarungroup.TaskbarUngroupConfigurable"
@@ -60,4 +72,9 @@
         <listener class="com.xixka.taskbarungroup.TaskbarUngroupBootstrap"
                   topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
+
+    <projectListeners>
+        <listener class="com.xixka.taskbarungroup.TaskbarUngroupProjectListener"
+                  topic="com.intellij.openapi.project.ProjectManagerListener"/>
+    </projectListeners>
 </idea-plugin>

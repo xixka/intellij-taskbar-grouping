@@ -37,11 +37,29 @@ interface Shell32 : StdCallLibrary {
 /** GWL_EXSTYLE：取窗口扩展样式 */
 private const val GWL_EXSTYLE = -20
 
+/** GWL_STYLE：取窗口基础样式（事件路径需要鉴别 WS_CHILD：EnumWindows 只给顶层窗口，WinEvent 不然） */
+private const val GWL_STYLE = -16
+
 /** WS_EX_TOOLWINDOW：工具窗口（浮窗/提示等）不在任务栏显示，跳过 */
 private const val WS_EX_TOOLWINDOW = 0x00000080
 
+/** WS_CHILD：子窗口（控件等）——绝非任务栏按钮候选 */
+private const val WS_CHILD = 0x40000000
+
 /** PROCESS_QUERY_LIMITED_INFORMATION：仅查询进程映像路径所需的最小权限 */
 private const val PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+/** EVENT_OBJECT_SHOW：对象（窗口）可见时发布；WinEvent 事件常量中最贴近任务栏按钮产生时机的一个 */
+private const val EVENT_OBJECT_SHOW = 0x8002
+
+/** OBJID_WINDOW：事件属于窗口对象本身（而非其子对象/标题栏等） */
+private const val OBJID_WINDOW = 0x00000000
+
+/** WINEVENT_OUTOFCONTEXT：回调不被映射进事件源进程，事件经安装线程的消息循环异步派发（无注入） */
+private const val WINEVENT_OUTOFCONTEXT = 0x0000
+
+/** WINEVENT_SKIPOWNPROCESS：跳过 IDE 自身进程产生的事件（项目窗口走 peer 路径） */
+private const val WINEVENT_SKIPOWNPROCESS = 0x0002
 
 interface User32 : StdCallLibrary {
 
@@ -57,9 +75,40 @@ interface User32 : StdCallLibrary {
 
     fun GetWindowThreadProcessId(hwnd: Long, lpdwProcessId: IntByReference): Int
 
+    /**
+     * HWINEVENTHOOK SetWinEventHook(eventMin, eventMax, hmodWinEventProc, pfnWinEventProc,
+     * idProcess, idThread, dwFlags)：系统级窗口事件订阅。out-of-context 模式下回调
+     * 由**安装线程的消息循环**派发（AWT EDT 即常驻消息泵）；返回 null 表示安装失败
+     * （如系统限制），调用方降级为纯轮询。hmodWinEventProc 传 null。
+     */
+    fun SetWinEventHook(
+        eventMin: Int,
+        eventMax: Int,
+        hmodWinEventProc: Pointer?,
+        pfnWinEventProc: WINEVENTPROC,
+        idProcess: Int,
+        idThread: Int,
+        dwFlags: Int,
+    ): Pointer?
+
+    /** BOOL UnhookWinEvent(HWINEVENTHOOK) */
+    fun UnhookWinEvent(hWinEventHook: Pointer): Boolean
+
+    /**
+     * BOOL SetWindowPos(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags)：
+     * 以全 no-op 坐标 + SWP_FRAMECHANGED 调用可促使系统重算窗口非客户区
+     * （用于清空 AUMID 后推动任务栏立即重估分组）。
+     */
+    fun SetWindowPos(hWnd: Long, hWndInsertAfter: Long, x: Int, y: Int, cx: Int, cy: Int, uFlags: Int): Boolean
+
     /** Kotlin fun interface 嵌套声明以支持 SAM 转换；JNA 据此生成原生回调桩 */
     fun interface WNDENUMPROC : StdCallLibrary.StdCallCallback {
         fun invoke(hwnd: Long, lParam: Long): Boolean
+    }
+
+    /** WinEventProc(hHook, event, hwnd, idObject, idChild, idThread, dwmsEventTime) */
+    fun interface WINEVENTPROC : StdCallLibrary.StdCallCallback {
+        fun invoke(hHook: Pointer?, event: Int, hwnd: Long, idObject: Int, idChild: Int, idThread: Int, dwmsEventTime: Int)
     }
 
     companion object {
@@ -68,6 +117,13 @@ interface User32 : StdCallLibrary {
         /** 对外只读地暴露判定常量（避免魔法数字散落调用方） */
         val WS_EX_TOOLWINDOW_MASK: Int get() = WS_EX_TOOLWINDOW
         val GWL_EXSTYLE_INDEX: Int get() = GWL_EXSTYLE
+        val GWL_STYLE_INDEX: Int get() = GWL_STYLE
+        val WS_CHILD_MASK: Int get() = WS_CHILD
+
+        val EVENT_OBJECT_SHOW_EVENT: Int get() = EVENT_OBJECT_SHOW
+        val OBJID_WINDOW_OBJECT: Int get() = OBJID_WINDOW
+        val WINEVENT_OUTOFCONTEXT_FLAG: Int get() = WINEVENT_OUTOFCONTEXT
+        val WINEVENT_SKIPOWNPROCESS_FLAG: Int get() = WINEVENT_SKIPOWNPROCESS
     }
 }
 
