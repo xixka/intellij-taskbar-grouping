@@ -3,6 +3,7 @@ package com.xixka.taskbarungroup
 import com.xixka.taskbarungroup.ExternalAppMatcher.MatchMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -63,5 +64,53 @@ class ExternalAppMatcherTest {
     fun `mixed entries keep only valid ones`() {
         val targets = ExternalAppMatcher.targetsOf(listOf("", "notepad.exe", "mspaint.exe"), MatchMode.FILE_NAME)
         assertEquals(setOf("notepad.exe", "mspaint.exe"), targets.keys)
+    }
+
+    // ---- 边界与畸形输入（输入解析防线的回归锚点） ---------------------------
+
+    @Test
+    fun `path ending with separator yields no basename (no false match)`() {
+        // 畸形：以分隔符结尾——substringAfterLast 得空串，必须归 null 而非匹配一切
+        assertNull(ExternalAppMatcher.imageBasename("C:\\Windows\\System32\\"))
+        assertNull(ExternalAppMatcher.imageBasename("C:/dir/"))
+        val targets = ExternalAppMatcher.targetsOf(listOf("C:\\", "\\", "/"), MatchMode.FILE_NAME)
+        assertTrue("纯分隔符条目必须被过滤", targets.isEmpty)
+    }
+
+    @Test
+    fun `separator-only or whitespace entries are filtered in both modes`() {
+        assertTrue(ExternalAppMatcher.targetsOf(listOf("\\", "/", "  ", ""), MatchMode.FULL_PATH).isEmpty)
+        assertTrue(ExternalAppMatcher.targetsOf(listOf("\\", "/", "  ", ""), MatchMode.FILE_NAME).isEmpty)
+    }
+
+    @Test
+    fun `full-path mode with trailing separator does not match clean path`() {
+        // 畸形条目：多一个尾分隔符 ≠ 同一路径（精确模式不静默容错）
+        val targets = ExternalAppMatcher.targetsOf(listOf("C:\\App\\app.exe\\"), MatchMode.FULL_PATH)
+        assertFalse(ExternalAppMatcher.matches("C:\\App\\app.exe", targets))
+    }
+
+    @Test
+    fun `unicode exe names round-trip in both modes`() {
+        val fullTargets = ExternalAppMatcher.targetsOf(listOf("C:\\应用\\记事本.exe"), MatchMode.FULL_PATH)
+        assertTrue(ExternalAppMatcher.matches("C:\\应用\\记事本.exe", fullTargets))
+        val nameTargets = ExternalAppMatcher.targetsOf(listOf("记事本.exe"), MatchMode.FILE_NAME)
+        assertTrue(ExternalAppMatcher.matches("C:\\其他目录\\记事本.exe", nameTargets))
+    }
+
+    @Test
+    fun `extension-less names match by exact basename`() {
+        val targets = ExternalAppMatcher.targetsOf(listOf("code"), MatchMode.FILE_NAME)
+        assertTrue(ExternalAppMatcher.matches("C:\\bin\\code", targets))
+        assertFalse("前缀相同但更长的不算同名", ExternalAppMatcher.matches("C:\\bin\\codex", targets))
+    }
+
+    @Test
+    fun `very long paths match without truncation`() {
+        val longDir = "very-long-directory-name\\".repeat(80)
+        val entry = "C:\\$longDir\\app.exe"
+        val targets = ExternalAppMatcher.targetsOf(listOf(entry), MatchMode.FULL_PATH)
+        // 归一化（大小写）后仍应整体匹配，不做截断比较
+        assertTrue(ExternalAppMatcher.matches(entry.replace("very-long", "VERY-LONG"), targets))
     }
 }

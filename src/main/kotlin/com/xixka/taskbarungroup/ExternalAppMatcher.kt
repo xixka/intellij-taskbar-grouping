@@ -41,10 +41,14 @@ object ExternalAppMatcher {
         }
     }
 
-    /** 归一化完整路径：去空白、统一反斜杠、小写（Windows 路径大小写不敏感） */
+    /**
+     * 归一化完整路径：去空白、统一反斜杠、小写（Windows 路径大小写不敏感）。
+     * 畸形输入（空串/纯空白/纯分隔符）一律归 null——与 [imageBasename] 的
+     * 过滤语义一致，任何合法 Windows 路径都含非分隔符字符，无误伤。
+     */
     private fun normalizePath(path: String): String? {
         val normalized = path.trim().replace('/', '\\').lowercase()
-        return normalized.ifEmpty { null }
+        return normalized.takeIf { it.isNotEmpty() && it.any { c -> c != '\\' } }
     }
 
     /** 归一化 exe 基名：映像完整路径或用户输入的任意形式均可（大小写不敏感） */

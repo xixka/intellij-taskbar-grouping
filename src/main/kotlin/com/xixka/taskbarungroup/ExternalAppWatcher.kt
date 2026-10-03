@@ -5,13 +5,13 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.sun.jna.Memory
+import com.sun.jna.Pointer
+import com.sun.jna.ptr.IntByReference
 import com.xixka.taskbarungroup.win32.Kernel32
 import com.xixka.taskbarungroup.win32.User32
 import com.xixka.taskbarungroup.win32.nudgeWindowFrame
 import com.xixka.taskbarungroup.win32.setWindowAumid
-import com.sun.jna.Memory
-import com.sun.jna.Pointer
-import com.sun.jna.ptr.IntByReference
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -133,9 +133,14 @@ internal class ExternalAppWatcher {
         future?.cancel(false)
         future = null
         uninstallWinEventHook()
-        val toUndo = handled.toTypedArray()
-        handled.clear()
-        attempts.clear()
+        // 快照+清账必须与 sweep/实时路径互斥：否则在途 sweep（持旧 targets）可在
+        // 清账之后继续写 AUMID 并登记 handled，导致清空列表后残留已写窗口
+        val toUndo: Array<Long>
+        synchronized(sweepLock) {
+            toUndo = handled.toTypedArray()
+            handled.clear()
+            attempts.clear()
+        }
         if (toUndo.isNotEmpty() && JnaLoader.isLoaded()) {
             AppExecutorUtil.getAppExecutorService().execute {
                 toUndo.forEach(::clearWindowAumid)
@@ -341,6 +346,11 @@ internal class ExternalAppWatcher {
 
     /** 写入每窗口唯一 AUMID；失败按 [attempts] 重试，超过上限放弃（权限受限窗口等）。 */
     private fun applyToWindow(hwnd: Long, pid: Int, targets: ExternalAppMatcher.Targets) {
+        // 停止守卫（volatile）：在途 sweep/实时任务可能持有停止前的旧 targets，
+        // stopAndUndo 清账后不得再写入——否则清空列表的窗口会残留 AUMID。
+        // 与 stopAndUndo 的清账段同持 [sweepLock]，检查-写入不可分割。
+        if (future == null) return
+        // merge 的可空返回是 Map 契约形式（CHM + 非空 remapping 实际不会为 null）
         val attempt = attempts.merge(hwnd, 1, Int::plus) ?: 1
         val aumid = externalAumid(pid, hwnd)
         val hr = try {

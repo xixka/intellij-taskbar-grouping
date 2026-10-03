@@ -1,8 +1,8 @@
 package com.xixka.taskbarungroup
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,5 +77,50 @@ class ProjectAumidTest {
         val hash = aumid.substringAfterLast('.')
         assertEquals(32, hash.length)
         assertTrue(hash.matches(Regex("[0-9a-f]{32}")))
+    }
+
+    // ---- 接口兼容（金标）：AUMID 是跨版本持久身份 ---------------------------
+
+    /**
+     * 独立重实现公式（与主实现无共享代码）：金标一旦失配，说明公式被改动——
+     * 既有用户的任务栏分组身份与固定项（pin）关联会全部漂移，属破坏性变更。
+     */
+    private fun independentlyDerivedAumid(product: String, path: String): String {
+        val sanitized = buildString {
+            for (c in product) if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '-') append(c)
+        }.ifEmpty { "IDEA" }
+        val hash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(path.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+            .take(32)
+        return "TBG.$sanitized.$hash".take(128)
+    }
+
+    @Test
+    fun `golden formula values stable across versions (identity compatibility contract)`() {
+        val cases = listOf(
+            "IntelliJ IDEA" to "C:\\work\\proj",
+            "PyCharm" to "/home/u/proj",
+            "IntelliJ IDEA" to "", // 空路径兜底分支
+        )
+        for ((product, path) in cases) {
+            assertEquals(
+                "AUMID 公式漂移会破坏既有用户的分组身份/固定项关联",
+                independentlyDerivedAumid(product, path),
+                TaskbarUngroupService.projectAumid(product, path),
+            )
+        }
+    }
+
+    @Test
+    fun `all real JetBrains product names yield pairwise-distinct aumids`() {
+        // 净化段必须两两互异，否则两个产品同路径打开会并入同组（跨产品隔离不变量）
+        val products = listOf(
+            "IntelliJ IDEA", "PyCharm", "WebStorm", "CLion", "Rider", "GoLand",
+            "RubyMine", "PhpStorm", "DataGrip", "DataSpell", "RustRover", "Aqua",
+            "Android Studio", "JetBrains Client",
+        )
+        val aumids = products.map { TaskbarUngroupService.projectAumid(it, "C:\\same\\path") }
+        assertEquals("产品净化段存在碰撞", products.size, aumids.toSet().size)
     }
 }

@@ -18,9 +18,9 @@ import java.awt.GraphicsEnvironment
 import java.awt.Toolkit
 import java.awt.Window
 import java.awt.event.WindowEvent
-import java.security.MessageDigest
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -237,7 +237,7 @@ class TaskbarUngroupService {
     }
 
     /**
-     * 兜底入口（启动完成后的 ProjectActivity 调用）。不依赖 JNA 当下是否就绪：
+     * 兜底入口（ProjectManagerListener.projectOpened 调用）。不依赖 JNA 当下是否就绪：
      * JNA 迟到由 [scheduleWindowRetry] 自愈，避免该项目永久失去兜底。
      * Frame 尚未创建时按固定节奏重试。
      */

@@ -4,12 +4,12 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
-import java.io.File
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import java.awt.BorderLayout
+import java.io.File
 import javax.swing.DefaultListModel
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -39,19 +39,23 @@ class TaskbarUngroupConfigurable : Configurable {
     private lateinit var fullPathCheckbox: JBCheckBox
     private val ideExeWarning = JBLabel().apply { isVisible = false }
 
+    init {
+        // 模型增删即时刷新 IDE exe 警告。注册必须在 createComponent 之外：
+        // Settings 框架会对同一 Configurable 实例多次 create/dispose UI，
+        // 在 createComponent 内注册会随重建叠加监听器（引用已废弃的标签）。
+        model.addListDataListener(object : ListDataListener {
+            override fun intervalAdded(e: ListDataEvent) = updateIdeExeWarning()
+            override fun intervalRemoved(e: ListDataEvent) = updateIdeExeWarning()
+            override fun contentsChanged(e: ListDataEvent) = updateIdeExeWarning()
+        })
+    }
+
     override fun getDisplayName(): String = "Taskbar Ungroup"
 
     override fun createComponent(): JComponent {
         list = JBList(model)
         list.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
         list.emptyText.text = "No applications configured"
-
-        // 模型增删即时刷新 IDE exe 警告（reset/addEntry/removeSelected 之外的所有路径）
-        model.addListDataListener(object : ListDataListener {
-            override fun intervalAdded(e: ListDataEvent) = updateIdeExeWarning()
-            override fun intervalRemoved(e: ListDataEvent) = updateIdeExeWarning()
-            override fun contentsChanged(e: ListDataEvent) = updateIdeExeWarning()
-        })
 
         val decorator = ToolbarDecorator.createDecorator(list)
             .setAddAction { addEntry() }

@@ -17,6 +17,15 @@ import com.intellij.openapi.project.ProjectManagerListener
  */
 class TaskbarUngroupProjectListener : ProjectManagerListener {
 
+    /**
+     * 2024.1 起平台将 projectOpened 标记为 @Deprecated（有意使用）：
+     * - 可用的「非弃用」替代 ProjectActivity 是 2023.1+ 才引入，兼容下界
+     *   2022.3（build 223）不可用；更古老的 StartupActivity 同样早已弃用；
+     * - JetBrains 对弃用 API 的兼容承诺 + Plugin Verifier 对 223/241/262
+     *   三端实测通过（弃用是警告级别，不构成验证失败）。
+     * 若未来平台真正移除该回调，verifier 会以 missing API 失败并暴露。
+     */
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun projectOpened(project: Project) {
         TaskbarUngroupService.getInstance().scheduleApply(project)
     }
