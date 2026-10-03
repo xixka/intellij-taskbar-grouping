@@ -21,6 +21,12 @@
         0.3.0 起可在 设置 → Tools → Taskbar Ungroup 中添加其他应用的 .exe，使其窗口也各自独立成按钮（不注入进程）。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.3.1 (critical fix): the AppUserModelID was written under a wrong property key (FMTID), so Windows
+        never read it — taskbar ungrouping did not actually take effect in 0.3.0. Now writes the official
+        PKEY_AppUserModel_ID ({9F4C2855-EE22-4C80-9C1A-1D6CE9F6D1CE}); verified end-to-end on a real Windows
+        runner in CI (window AUMID write + independent read-back assertion for both IDE and external-app
+        windows). Windows already carrying the ineffective key need nothing: the new key is applied on the
+        next window/sweep.</p>
         <p>0.3.0: new settings page (Settings &rarr; Tools &rarr; Taskbar Ungroup) — add external applications (.exe)
         whose windows should be ungrouped on the taskbar. Each configured application's window gets a unique
         window-level AppUserModelID (one taskbar button per window) via the documented Shell property API; windows are
