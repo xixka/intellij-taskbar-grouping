@@ -47,12 +47,15 @@ intellijPlatform {
     }
     pluginVerification {
         ides {
-            // 支持区间下限：ideaIC 2022.3.3（IC 自 2025.3 起不再是可验证目标）
-            create(IntelliJPlatformType.IntellijIdeaCommunity, "2022.3.3")
-            // 编译目标同源版本：ideaIC 2024.1.7
+            // 常规 CI 只验证编译目标同源版本（一套 IDE 分发，缓存轻、跑得快）；
+            // 区间边界按需开启：-PverifyAllIdes=true 或 CI 手动触发勾选 verify-all-ides
             create(IntelliJPlatformType.IntellijIdeaCommunity, "2024.1.7")
-            // 支持区间上限：当前最新 IntelliJ IDEA 2026.2.3（build 262.*，新 IntellijIdea 类型）
-            create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
+            if (providers.gradleProperty("verifyAllIdes").map { it.toBoolean() }.getOrElse(false)) {
+                // 支持区间下限：ideaIC 2022.3.3（IC 自 2025.3 起不再是可验证目标）
+                create(IntelliJPlatformType.IntellijIdeaCommunity, "2022.3.3")
+                // 支持区间上限：IntelliJ IDEA 2026.2.3（build 262.*，新 IntellijIdea 类型）
+                create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
+            }
         }
     }
     publishing {

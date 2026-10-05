@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      verify-all-ides:
+        description: '全量验证区间边界（ideaIC 2022.3.3 + IntelliJ IDEA 2026.2.3）'
+        type: boolean
+        default: false
 
 # 新推送取消同分支的旧运行（含其 release 环节，dev 产物始终对应最新 master）
 concurrency:
@@ -27,19 +32,29 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # IDE 分发（编译目标 + 3 个 verifier 目标）与解包 transforms 缓存，
-      # 键含 build.gradle.kts（IDE 版本钉死于此）与 Gradle 版本（wrapper）
+      # IDE 分发（常规仅编译目标 2024.1.7，一套）与解包 transforms 缓存。
+      # 实证（Gradle 8.10.2 本地全链跑 verifyPlugin）：transforms 实际落
+      # ~/.gradle/caches/<版本>/transforms —— 旧键的 transforms 是幽灵路径从未命中，
+      # 每轮都在 build 步骤重做 IDE 解包/插装，多 IDE 时缓存超 10GB 被驱逐抖动。
+      # 键含 build.gradle.kts 与 wrapper（版本升级自然换键）；v2 前缀起新键系，
+      # 不回灌旧幽灵条目（其内含 3 套 IDE 分发的死重）
       - name: Cache IDE distributions and transforms
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches/modules-2
-            ~/.gradle/caches/transforms
-          key: ${{ runner.os }}-intellij-dists-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-intellij-dists-
+            ~/.gradle/caches/8.10.2/transforms
+          key: ${{ runner.os }}-intellij-dists-v2-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-intellij-dists-v2-
 
       - name: Build, test and verify plugin
-        run: ./gradlew test buildPlugin verifyPlugin --stacktrace --no-daemon
+        # 常规仅验证编译目标 2024.1.7；手动触发勾选 verify-all-ides 时加验证区间边界
+        run: |
+          GRADLE_ARGS=""
+          if [ "${{ github.event.inputs.verify-all-ides }}" = "true" ]; then
+            GRADLE_ARGS="-PverifyAllIdes=true"
+          fi
+          ./gradlew test buildPlugin verifyPlugin $GRADLE_ARGS --stacktrace --no-daemon
 
       - name: Upload plugin distribution
         if: always()
@@ -75,15 +90,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # 沙箱 IDE（ideaIC 分发 + 解包 transforms）缓存：此前每次全新下载 ~800 MB
+      # 沙箱 IDE 缓存：modules-2（ideaIC 分发）+ 8.10.2/transforms（Gradle 8 实际解包落点）
       - name: Cache sandbox IDE distribution
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches/modules-2
-            ~/.gradle/caches/transforms
-          key: ${{ runner.os }}-intellij-dists-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-intellij-dists-
+            ~/.gradle/caches/8.10.2/transforms
+          key: ${{ runner.os }}-intellij-dists-v2-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-intellij-dists-v2-
 
       - name: Prepare sandbox IDE with plugin
         shell: pwsh

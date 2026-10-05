@@ -15,7 +15,7 @@
 
 1. **编译零警告**（K2 严格按警告审读，0.4.1 起零警告是既定基线，不得回退）
 2. 测试全绿（纯逻辑测试必须无时间/随机/文件系统依赖，不引入 flaky）
-3. Plugin Verifier 三端通过：ideaIC 2022.3.3 / 2024.1.7 / IntelliJ IDEA 2026.2.3
+3. Plugin Verifier 通过：常规仅验证编译目标 ideaIC 2024.1.7；疑似区间不兼容时以 `-PverifyAllIdes=true` 全量验证（边界 ideaIC 2022.3.3 + IntelliJ IDEA 2026.2.3，CI 手动触发勾选 verify-all-ides 同效）
 4. push 后 CI 三 job 绿：build（ubuntu）→ windows-smoke（实机双开 notepad 断言 AUMID）→ dev-release
 
 环境提示：`~/.gradle` 在长会话环境可能被外部清理进程回收（OOM-killer + SIGKILL daemon）。gradle 不可用时可用 K2 编译器直连编译+测试（classpath = ideaIC 全 jar + `-Xfriend-paths` 指向 main 输出模拟 test 编译 friend 语义；JUnitCore 跑全量）。
@@ -56,12 +56,12 @@
 | Gradle Wrapper | 8.10.2 | 计划锚定 8.x |
 | Kotlin/KGP | 2.1.0 | 官方测试上限为 Gradle 8.10 |
 | IntelliJ Platform Gradle Plugin | 2.9.0 | 2.10+ 要求 Gradle ≥8.13、2.13+ 要求 ≥9.0，与 8.x 冲突 |
-| ideaIC | 2024.1.7 | sinceBuild 241，测试在 2022.3.3/2026.2.3 两个边界另验 |
+| ideaIC | 2024.1.7 | sinceBuild 241；边界 2022.3.3/2026.2.3 按需全量验证（-PverifyAllIdes） |
 | JVM 工具链 | 17 | 与 241 一致 |
 
 ## CI 与发布
 
-- `ci.yml`（push master）：build → windows-smoke → dev-release（dev 产物发布到 GitHub Releases）
+- `ci.yml`（push master）：build（常规仅验证编译目标 2024.1.7，一套 IDE 分发缓存）→ windows-smoke → dev-release（dev 产物发布到 GitHub Releases）；手动触发可勾选 verify-all-ides 全量验证区间边界
 - `release.yml`（手动 `workflow_dispatch`）：`verifyPlugin publishPlugin` 上架 Marketplace，需仓库密钥 `PUBLISH_TOKEN`；插件 ID `com.xixka.taskbarungroup`
 - `plugin.xml` 的 version/change-notes 只在发布流更新；进行中改动记 `CHANGELOG.md` 的「未发布」段
 
