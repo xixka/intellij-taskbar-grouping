@@ -29,23 +29,11 @@ jobs:
           distribution: zulu
           java-version: '17'
 
+      # Gradle 缓存走 setup-gradle 内建（dependencies/transforms/wrapper 全覆盖）：
+      # 常规仅 1 套 IDE 后约 1.8GB，无需自建缓存（自建与内建重复，多 IDE 时代
+      # 总量超 10GB 触发驱逐抖动，是 39-65 分钟慢因）
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      # IDE 分发（常规仅编译目标 2024.1.7，一套）与解包 transforms 缓存。
-      # 实证（Gradle 8.10.2 本地全链跑 verifyPlugin）：transforms 实际落
-      # ~/.gradle/caches/<版本>/transforms —— 旧键的 transforms 是幽灵路径从未命中，
-      # 每轮都在 build 步骤重做 IDE 解包/插装，多 IDE 时缓存超 10GB 被驱逐抖动。
-      # 键含 build.gradle.kts 与 wrapper（版本升级自然换键）；v2 前缀起新键系，
-      # 不回灌旧幽灵条目（其内含 3 套 IDE 分发的死重）
-      - name: Cache IDE distributions and transforms
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches/modules-2
-            ~/.gradle/caches/8.10.2/transforms
-          key: ${{ runner.os }}-intellij-dists-v2-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-intellij-dists-v2-
 
       - name: Build, test and verify plugin
         # 常规仅验证编译目标 2024.1.7；手动触发勾选 verify-all-ides 时加验证区间边界
@@ -87,18 +75,9 @@ jobs:
           distribution: zulu
           java-version: '17'
 
+      # Gradle 缓存同上，走 setup-gradle 内建
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      # 沙箱 IDE 缓存：modules-2（ideaIC 分发）+ 8.10.2/transforms（Gradle 8 实际解包落点）
-      - name: Cache sandbox IDE distribution
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches/modules-2
-            ~/.gradle/caches/8.10.2/transforms
-          key: ${{ runner.os }}-intellij-dists-v2-${{ hashFiles('build.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-intellij-dists-v2-
 
       - name: Prepare sandbox IDE with plugin
         shell: pwsh

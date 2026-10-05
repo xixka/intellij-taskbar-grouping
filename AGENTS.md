@@ -61,7 +61,7 @@
 
 ## CI 与发布
 
-- `ci.yml`（push master）：build（常规仅验证编译目标 2024.1.7，一套 IDE 分发缓存）→ windows-smoke → dev-release（dev 产物发布到 GitHub Releases）；手动触发可勾选 verify-all-ides 全量验证区间边界
+- `ci.yml`（push master）：build（常规仅验证编译目标 2024.1.7；Gradle 缓存走 setup-gradle 内建，勿再自建 IDE 分发缓存——会与内建重复、曾致缓存总量超 10GB 驱逐抖动）→ windows-smoke → dev-release（dev 产物发布到 GitHub Releases）；手动触发可勾选 verify-all-ides 全量验证区间边界
 - `release.yml`（手动 `workflow_dispatch`）：`verifyPlugin publishPlugin` 上架 Marketplace，需仓库密钥 `PUBLISH_TOKEN`；插件 ID `com.xixka.taskbarungroup`
 - `plugin.xml` 的 version/change-notes 只在发布流更新；进行中改动记 `CHANGELOG.md` 的「未发布」段
 
