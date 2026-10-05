@@ -21,9 +21,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build, verify and publish plugin
+        # 发布时刻即手动时刻：全量验证支持区间边界（2022.3.3 / 2026.2.3 + 编译目标）
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-        run: ./gradlew verifyPlugin publishPlugin --stacktrace --no-daemon
+        run: ./gradlew verifyPlugin publishPlugin -PverifyAllIdes=true --stacktrace --no-daemon
 
       - name: Upload published plugin distribution
         if: always()

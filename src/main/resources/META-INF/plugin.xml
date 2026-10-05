@@ -22,6 +22,13 @@
         0.4.0 起外部应用窗口实时生效（WinEvent 事件订阅）、可选完整路径匹配、兼容 2022.3 起的 IDE。</p>
     ]]></description>
     <change-notes><![CDATA[
+        <p>0.4.1: correctness fixes from a code review: clearing the external-app list while a background sweep is
+        in flight can no longer leave a stale per-window AUMID behind (snapshot/cleanup are now mutually exclusive
+        with scanning, and the write path is guarded on stop); the settings page no longer accumulates duplicate
+        listeners when its UI is re-created; malformed entries (pure separators/whitespace) in full-path matching
+        mode are filtered the same way as in file-name mode. Compile is now warning-free, and the unit-test suite
+        grew from 17 to 29 (AUMID formula golden tests, serialization idempotency/replace semantics, malformed-input
+        edges).</p>
         <p>0.4.0: real-time external-window detection via an out-of-context WinEvent subscription
         (SetWinEventHook, EVENT_OBJECT_SHOW) delivered through the AWT message pump &mdash; new external windows are
         ungrouped the moment they appear instead of on the next 2-second sweep (the sweep remains as a fallback,
