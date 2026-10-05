@@ -6,6 +6,13 @@
         </linearGradient>
     </defs>
     <rect width="40" height="40" rx="8" fill="url(#bg)"/>
-    <rect x="6.5" y="12" width="12" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.95"/>
-    <rect x="21.5" y="12" width="12" height="16" rx="3" fill="#FFFFFF" fill-opacity="0.55"/>
+    <!-- 两个项目窗口（蓝/绿标题栏），各自映射下方任务栏的一枚独立按钮 -->
+    <path d="M5 8 L5 7 Q5 4.5 7.5 4.5 L16 4.5 Q18.5 4.5 18.5 7 L18.5 8 Z" fill="#087CFA"/>
+    <path d="M5 8 L18.5 8 L18.5 14 Q18.5 16.5 16 16.5 L7.5 16.5 Q5 16.5 5 14 Z" fill="#FFFFFF"/>
+    <path d="M21.5 8 L21.5 7 Q21.5 4.5 24 4.5 L32.5 4.5 Q35 4.5 35 7 L35 8 Z" fill="#21D789"/>
+    <path d="M21.5 8 L35 8 L35 14 Q35 16.5 32.5 16.5 L24 16.5 Q21.5 16.5 21.5 14 Z" fill="#FFFFFF"/>
+    <!-- 任务栏条 + 两枚颜色对应的分离按钮（间隙即「取消分组」） -->
+    <rect x="4.5" y="24" width="31" height="11.5" rx="3" fill="#FFFFFF" fill-opacity="0.95"/>
+    <rect x="7.5" y="26.75" width="9" height="6" rx="2" fill="#087CFA"/>
+    <rect x="23.5" y="26.75" width="9" height="6" rx="2" fill="#21D789"/>
 </svg>
