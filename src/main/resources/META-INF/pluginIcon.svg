@@ -6,7 +6,7 @@
         </linearGradient>
     </defs>
     <rect width="40" height="40" rx="8" fill="url(#bg)"/>
-    <!-- 两形状极简稿·放大版：两枚分离按钮，一实一透区分身份，间隙即「取消分组」 -->
-    <rect x="4.5" y="8" width="13" height="24" rx="3.5" fill="#FFFFFF"/>
-    <rect x="22.5" y="8" width="13" height="24" rx="3.5" fill="#FFFFFF" fill-opacity="0.75"/>
+    <!-- 两形状·正方形版：两枚 15×15 方形按钮同基线并排，一实一透区分身份，间隙即「取消分组」 -->
+    <rect x="3" y="12.5" width="15" height="15" rx="3.5" fill="#FFFFFF"/>
+    <rect x="22" y="12.5" width="15" height="15" rx="3.5" fill="#FFFFFF" fill-opacity="0.75"/>
 </svg>
