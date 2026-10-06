@@ -6,9 +6,7 @@
         </linearGradient>
     </defs>
     <rect width="40" height="40" rx="8" fill="url(#bg)"/>
-    <!-- 任务栏条 -->
-    <rect x="4.5" y="21.5" width="31" height="13" rx="3.5" fill="#FFFFFF"/>
-    <!-- 两枚分离的独立按钮：蓝/绿 = 不同项目身份，间隙即「取消分组」 -->
-    <rect x="7.5" y="24" width="9.5" height="8" rx="2" fill="#087CFA"/>
-    <rect x="23" y="24" width="9.5" height="8" rx="2" fill="#21D789"/>
+    <!-- 两形状极简稿·放大版：两枚分离按钮，一实一透区分身份，间隙即「取消分组」 -->
+    <rect x="4.5" y="8" width="13" height="24" rx="3.5" fill="#FFFFFF"/>
+    <rect x="22.5" y="8" width="13" height="24" rx="3.5" fill="#FFFFFF" fill-opacity="0.75"/>
 </svg>
